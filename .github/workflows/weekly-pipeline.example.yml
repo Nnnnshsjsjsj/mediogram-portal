@@ -1,0 +1,44 @@
+# ОБРАЗЕЦ для ПРИВАТНОГО репозитория бота (mediogram-lead-radar).
+# Скопируйте в .github/workflows/ бота и добавьте после существующего шага бота.
+# Требуемые Secrets в репо бота: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+# RESEND_API_KEY, PORTAL_URL, FROM_EMAIL, SLACK_WEBHOOK_URL
+name: Weekly digest
+on:
+  schedule:
+    - cron: "0 5 * * 1"   # понедельник 05:00 UTC
+  workflow_dispatch:
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ... здесь ваши существующие шаги бота, которые создают out/latest.json ...
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm i @supabase/supabase-js@2
+      - name: Sync to Supabase
+        run: node scripts/sync_to_db.mjs out/latest.json
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Send digest emails
+        run: node scripts/send_digest.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PORTAL_URL: ${{ secrets.PORTAL_URL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      # Урок июльского инцидента: пайплайн обязан сообщать и об успехе, и об отказе.
+      - name: Slack — success
+        if: success()
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ Weekly digest OK — $(date -u +%F)\"}" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"
+      - name: Slack — failure
+        if: failure()
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🔴 Weekly digest FAILED — проверьте Actions: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"

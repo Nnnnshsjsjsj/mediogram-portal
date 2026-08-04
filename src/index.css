@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #040810;
+  --panel: #070C16;
+  --card: #0C1424;
+  --line: #1E2C46;
+  --teal: #00C2C7;
+  --text: #E6EDF7;
+  --muted: #8FA3C0;
+  --green: #35D07F;
+  --red: #FF6B6B;
+  --amber: #FFC24B;
+}
+
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: Inter, system-ui, sans-serif; }
+.mono { font-family: "IBM Plex Mono", monospace; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
