@@ -29,6 +29,22 @@ export interface Trial {
   source_url: string
   first_posted: string | null
   first_seen_at: string
+  score: number | null           // 0-100, скоринг из радара
+  score_reasons: string[]        // почему именно столько баллов
+}
+
+export function scoreColor(score: number | null): string {
+  if (score == null) return 'var(--muted)'
+  if (score >= 85) return 'var(--red)'      // 🔥 горячее
+  if (score >= 70) return 'var(--amber)'    // тёплое
+  return 'var(--muted)'
+}
+
+export function scoreLabel(score: number | null): string {
+  if (score == null) return ''
+  if (score >= 85) return 'Горячее'
+  if (score >= 70) return 'Тёплое'
+  return 'Наблюдение'
 }
 
 export interface Decision {

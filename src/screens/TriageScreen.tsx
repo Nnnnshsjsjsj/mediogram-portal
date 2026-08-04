@@ -15,6 +15,8 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
   const [tab, setTab] = useState<SubTab>('current')
   const [catFilter, setCatFilter] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy] = useState<'score' | 'fresh'>('score')
   const [undo, setUndo] = useState<{ trialId: string; prev: Decision | undefined } | null>(null)
   const undoTimer = useRef<number | null>(null)
 
@@ -39,14 +41,28 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
   )
 
   const visible = useMemo(() => {
-    return trials.filter((t) => {
+    const filtered = trials.filter((t) => {
       if (subscribed && !subscribed.has(t.category)) return false
       if (tab === 'current' ? t.is_upcoming : !t.is_upcoming) return false
       if (catFilter.size && !catFilter.has(t.category)) return false
       if (statusFilter.size && !statusFilter.has(t.recruitment_status)) return false
+      if (countryFilter.size && !t.countries.some((c) => countryFilter.has(c))) return false
       return true
     })
-  }, [trials, subscribed, tab, catFilter, statusFilter])
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'score') {
+        const d = (b.score ?? -1) - (a.score ?? -1)
+        if (d !== 0) return d
+      }
+      return String(b.first_posted ?? b.first_seen_at).localeCompare(String(a.first_posted ?? a.first_seen_at))
+    })
+  }, [trials, subscribed, tab, catFilter, statusFilter, countryFilter, sortBy])
+
+  const availableCountries = useMemo(() => {
+    const freq = new Map<string, number>()
+    for (const t of trials) for (const c of t.countries) freq.set(c, (freq.get(c) ?? 0) + 1)
+    return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([c]) => c)
+  }, [trials])
 
   const pending = visible.filter((t) => !decisions.has(t.id))
   const done = visible.length - pending.length
@@ -132,6 +148,14 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
           <Chip key={s} label={s} active={statusFilter.has(s)} mono
             onClick={() => setStatusFilter(toggleSet(statusFilter, s))} />
         ))}
+        <span className="w-px bg-[var(--line)] mx-1 self-stretch" />
+        {availableCountries.map((c) => (
+          <Chip key={c} label={c} active={countryFilter.has(c)}
+            onClick={() => setCountryFilter(toggleSet(countryFilter, c))} />
+        ))}
+        <span className="w-px bg-[var(--line)] mx-1 self-stretch" />
+        <Chip label={sortBy === 'score' ? '↓ по баллу' : '↓ по свежести'} active
+          onClick={() => setSortBy(sortBy === 'score' ? 'fresh' : 'score')} />
       </div>
 
       {tab === 'current' && visible.length > 0 && (

@@ -84,6 +84,10 @@ async function main() {
         phase: l.phase ? String(l.phase) : null,
         countries: Array.isArray(l.countries) ? l.countries : [],
         conditions: Array.isArray(l.conditions) ? l.conditions : [],
+        score: Number.isFinite(Number(l.score)) ? Number(l.score) : null,
+        score_reasons: Array.isArray(l.score_reasons) ? l.score_reasons
+          : Array.isArray(l.why) ? l.why
+          : (typeof l.why === 'string' && l.why ? [l.why] : []),
         source_url: String(l.url ?? `https://clinicaltrials.gov/study/${l.nct}`),
         first_posted: l.posted || l.first_posted || null,
         last_updated_at: new Date().toISOString(),

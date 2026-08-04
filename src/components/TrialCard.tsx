@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Decision, Trial } from '../lib/types'
-import { CATEGORIES, statusColor, statusLabel } from '../lib/types'
+import { CATEGORIES, scoreColor, scoreLabel, statusColor, statusLabel } from '../lib/types'
 
 interface Props {
   trial: Trial
@@ -14,10 +14,18 @@ interface Props {
 export default function TrialCard({ trial, decision, watched, mode, onDecide, onToggleWatch }: Props) {
   const [open, setOpen] = useState(false)
   const title = trial.title_ru || trial.title
+  const sc = trial.score
 
   return (
     <article className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3">
       <header className="flex flex-wrap items-center gap-2">
+        {sc != null && (
+          <span className="mono text-[12px] font-semibold px-2 py-0.5 rounded-lg"
+            title={scoreLabel(sc)}
+            style={{ color: '#040810', background: scoreColor(sc) }}>
+            {sc >= 85 ? '🔥 ' : ''}{sc}
+          </span>
+        )}
         <span className="mono text-[11px] text-[var(--muted)]">{trial.nct_id}</span>
         <span className="text-[11px] px-2 py-0.5 rounded-full border border-[var(--line)] text-[var(--muted)]">
           {CATEGORIES[trial.category] ?? trial.category}
@@ -33,15 +41,29 @@ export default function TrialCard({ trial, decision, watched, mode, onDecide, on
 
       <h3 className="text-[15px] font-semibold leading-snug">{title}</h3>
 
-      <p className={`text-[13px] leading-relaxed text-[var(--muted)] ${open ? '' : 'line-clamp-3'}`}>
+      <p className={`text-[13px] leading-relaxed text-[var(--muted)] ${open ? 'whitespace-pre-line' : 'line-clamp-3'}`}>
         {trial.summary_ru || '—'}
       </p>
 
       {open && (
-        <div className="text-[13px] text-[var(--muted)] flex flex-col gap-1.5 border-t border-[var(--line)] pt-3">
+        <div className="text-[13px] text-[var(--muted)] flex flex-col gap-2.5 border-t border-[var(--line)] pt-3">
+          {sc != null && trial.score_reasons?.length > 0 && (
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3 flex flex-col gap-1.5">
+              <span className="text-[11px] uppercase tracking-wide font-semibold"
+                style={{ color: scoreColor(sc) }}>
+                Почему {sc} баллов
+              </span>
+              {trial.score_reasons.map((r, i) => (
+                <div key={i} className="flex gap-2 leading-snug">
+                  <span style={{ color: scoreColor(sc) }}>•</span>
+                  <span>{r}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {trial.sponsor && <div><span className="text-[var(--text)]">Спонсор:</span> {trial.sponsor}</div>}
           {trial.conditions.length > 0 && <div><span className="text-[var(--text)]">Состояния:</span> {trial.conditions.join(', ')}</div>}
-          {trial.countries.length > 0 && <div><span className="text-[var(--text)]">Страны:</span> {trial.countries.slice(0, 8).join(', ')}{trial.countries.length > 8 ? '…' : ''}</div>}
+          {trial.countries.length > 0 && <div><span className="text-[var(--text)]">Страны:</span> {trial.countries.slice(0, 10).join(', ')}{trial.countries.length > 10 ? '…' : ''}</div>}
           <a href={trial.source_url} target="_blank" rel="noreferrer" className="text-[var(--teal)] hover:underline">
             Открыть на ClinicalTrials.gov ↗
           </a>
