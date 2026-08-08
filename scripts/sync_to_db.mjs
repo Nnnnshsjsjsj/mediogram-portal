@@ -99,11 +99,13 @@ async function main() {
   const { data: upserted, error: upErr } = await db
     .from('trials')
     .upsert(rows, { onConflict: 'nct_id' })
-    .select('id, nct_id, is_upcoming, first_posted')
+    .select('id, nct_id, is_upcoming, first_posted, score')
   if (upErr) throw upErr
   console.log(`Upsert в trials: ${upserted.length}`)
 
-  // Выпуск недели.
+  // Выпуск недели: только отборное — топ-15 актуальных + топ-5 будущих по баллу.
+  const TOP_CURRENT = 15
+  const TOP_UPCOMING = 5
   const week = mondayOfThisWeek()
   const { data: digest, error: dErr } = await db
     .from('digests')
@@ -111,19 +113,24 @@ async function main() {
     .select('id').single()
   if (dErr) throw dErr
 
-  const byDate = [...upserted].sort((a, b) => String(b.first_posted ?? '').localeCompare(String(a.first_posted ?? '')))
-  const dt = byDate.map((t, i) => ({
+  const byScore = (a, b) => (b.score ?? -1) - (a.score ?? -1)
+    || String(b.first_posted ?? '').localeCompare(String(a.first_posted ?? ''))
+  const current = upserted.filter((t) => !t.is_upcoming).sort(byScore).slice(0, TOP_CURRENT)
+  const upcoming = upserted.filter((t) => t.is_upcoming).sort(byScore).slice(0, TOP_UPCOMING)
+  const dt = [...current, ...upcoming].map((t, i) => ({
     digest_id: digest.id,
     trial_id: t.id,
     section: t.is_upcoming ? 'upcoming' : 'current',
     rank: i,
   }))
-  const { error: dtErr } = await db.from('digest_trials').upsert(dt, { onConflict: 'digest_id,trial_id' })
+
+  // Пересобираем выпуск начисто, чтобы не копить хвосты прошлых прогонов.
+  const { error: delErr } = await db.from('digest_trials').delete().eq('digest_id', digest.id)
+  if (delErr) throw delErr
+  const { error: dtErr } = await db.from('digest_trials').insert(dt)
   if (dtErr) throw dtErr
 
-  const cur = dt.filter((x) => x.section === 'current').length
-  const upc = dt.length - cur
-  console.log(`Выпуск ${week}: current=${cur}, upcoming=${upc}`)
+  console.log(`Выпуск ${week}: current=${current.length}, upcoming=${upcoming.length} (отобрано из ${upserted.length})`)
   // Строка для Slack-репорта в workflow:
   console.log(`::notice::Digest ${week} — current ${cur}, upcoming ${upc}`)
 }
