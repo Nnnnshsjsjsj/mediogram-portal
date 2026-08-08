@@ -47,7 +47,7 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh] bg-[var(--bg)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--panel)]/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--panel)]/85 backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 h-14 flex items-center gap-5">
           <div className="flex items-center gap-2">
             <RadarMark />
@@ -99,7 +99,7 @@ function LoginScreen() {
 
   return (
     <FullScreen>
-      <div className="w-full max-w-sm rounded-3xl border border-[var(--line)] bg-[var(--card)] p-7 flex flex-col gap-5">
+      <div className="w-full max-w-sm rounded-3xl border border-[var(--line)] bg-[var(--card)] p-7 flex flex-col gap-5 rise" style={{ boxShadow: "var(--shadow)" }}>
         <div className="flex items-center gap-2.5">
           <RadarMark size={30} />
           <div>
@@ -124,7 +124,7 @@ function LoginScreen() {
             </label>
             <button onClick={sendLink} disabled={busy || !email.includes('@')}
               className="rounded-xl py-2.5 font-semibold text-[14px] disabled:opacity-40"
-              style={{ background: 'var(--teal)', color: '#040810' }}>
+              style={{ background: 'var(--teal)', color: 'var(--on-accent)' }}>
               {busy ? 'Отправка…' : 'Получить ссылку для входа'}
             </button>
             {err && <p className="text-[12px]" style={{ color: 'var(--red)' }}>{err}</p>}

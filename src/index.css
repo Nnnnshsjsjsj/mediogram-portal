@@ -1,21 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #040810;
-  --panel: #070C16;
-  --card: #0C1424;
-  --line: #1E2C46;
-  --teal: #00C2C7;
-  --text: #E6EDF7;
-  --muted: #8FA3C0;
-  --green: #35D07F;
-  --red: #FF6B6B;
-  --amber: #FFC24B;
+  --bg: #F7F9FC;
+  --panel: #FFFFFF;
+  --card: #FFFFFF;
+  --line: #E3E9F2;
+  --line-strong: #CBD6E4;
+  --teal: #0B9BA1;
+  --teal-bright: #00C2C7;
+  --teal-soft: #E5F7F8;
+  --text: #0B1526;
+  --muted: #5B6B84;
+  --green: #1FA35C;
+  --green-soft: #E8F7EF;
+  --red: #E5484D;
+  --red-soft: #FDEBEC;
+  --amber: #D97E00;
+  --amber-soft: #FFF4E0;
+  --on-accent: #FFFFFF;
+  --shadow: 0 1px 2px rgba(11,21,38,0.05), 0 8px 24px -12px rgba(11,21,38,0.12);
+  --shadow-lift: 0 2px 4px rgba(11,21,38,0.06), 0 16px 32px -12px rgba(11,21,38,0.18);
 }
 
 html, body { background: var(--bg); color: var(--text); }
-body { font-family: Inter, system-ui, sans-serif; }
+body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 .mono { font-family: "IBM Plex Mono", monospace; }
+
+/* Входная анимация карточек — мягкий подъём, ступенчато */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise-in .38s cubic-bezier(.22,.8,.36,1) both; }
+.rise-1 { animation-delay: .03s } .rise-2 { animation-delay: .07s }
+.rise-3 { animation-delay: .11s } .rise-4 { animation-delay: .15s }
+.rise-5 { animation-delay: .19s } .rise-6 { animation-delay: .23s }
+
+/* Карточка: подъём на hover */
+.card-hover { transition: box-shadow .22s ease, transform .22s ease; box-shadow: var(--shadow); }
+.card-hover:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+
+/* Пульс текущей точки трека */
+@keyframes dot-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(11,155,161,.35); }
+  70%  { box-shadow: 0 0 0 8px rgba(11,155,161,0); }
+  100% { box-shadow: 0 0 0 0 rgba(11,155,161,0); }
+}
+.dot-current { animation: dot-pulse 2s ease-out infinite; }
+
+/* Заполнение линии трека */
+.track-fill { transition: width .5s cubic-bezier(.22,.8,.36,1); }
+
+/* Тост */
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.toast-in { animation: toast-in .25s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

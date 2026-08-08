@@ -64,7 +64,7 @@ export default function SettingsScreen({ profile, onSaved }: { profile: Profile;
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving}
           className="px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-opacity disabled:opacity-50"
-          style={{ background: 'var(--teal)', color: '#040810' }}>
+          style={{ background: 'var(--teal)', color: 'var(--on-accent)' }}>
           {saving ? 'Сохранение…' : 'Сохранить'}
         </button>
         {saved && <span className="text-[12px] text-[var(--green)]">Сохранено</span>}

@@ -130,6 +130,13 @@ export async function adminUpdateDoctor(id: string, patch: Partial<Profile>) {
   if (error) throw error
 }
 
+export async function adminSetStage(userId: string, trialId: string, stage: WorkStage) {
+  const { error } = await supabase.from('decisions')
+    .update({ work_stage: stage })
+    .eq('user_id', userId).eq('trial_id', trialId).eq('status', 'accepted')
+  if (error) throw error
+}
+
 // Приглашение нового врача — через Edge Function (service role живёт на сервере).
 export async function adminInvite(email: string, fullName: string) {
   const { data, error } = await supabase.functions.invoke('admin-invite', {

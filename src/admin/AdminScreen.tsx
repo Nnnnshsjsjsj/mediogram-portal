@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { adminGetActivity, adminGetAllDecisions, adminGetDoctors, adminInvite, adminUpdateDoctor, getLatestTrials } from '../lib/api'
-import type { Decision, Profile, Trial } from '../lib/types'
+import { adminGetActivity, adminGetAllDecisions, adminGetDoctors, adminInvite, adminSetStage, adminUpdateDoctor, getLatestTrials } from '../lib/api'
+import StageTracker from '../components/StageTracker'
+import type { Decision, Profile, Trial, WorkStage } from '../lib/types'
 import { STAGES } from '../lib/types'
 
 export default function AdminScreen() {
@@ -51,6 +52,12 @@ export default function AdminScreen() {
     } catch (e) {
       setInviteMsg(`Ошибка: ${(e as Error).message}. Запасной путь: Supabase Dashboard → Authentication → Invite user.`)
     }
+  }
+
+  async function setStage(d: Decision, stage: WorkStage) {
+    setDecisions((prev) => prev.map((x) =>
+      x.user_id === d.user_id && x.trial_id === d.trial_id ? { ...x, work_stage: stage } : x))
+    try { await adminSetStage(d.user_id, d.trial_id, stage) } catch { loadAll() }
   }
 
   if (loading) return <p className="py-16 text-center text-[13px] text-[var(--muted)]">Загрузка…</p>
@@ -114,6 +121,33 @@ export default function AdminScreen() {
         </div>
       </section>
 
+      {/* Работа по принятым: этапы отмечает админ, врач видит трек */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-[14px] font-semibold">Работа по принятым исследованиям</h2>
+        {decisions.filter((d) => d.status === 'accepted').length === 0 && (
+          <p className="text-[13px] text-[var(--muted)]">Пока никто ничего не принял.</p>
+        )}
+        <div className="flex flex-col gap-3">
+          {decisions.filter((d) => d.status === 'accepted').map((d) => {
+            const doc = doctors.find((x) => x.id === d.user_id)
+            const t = trials.find((x) => x.id === d.trial_id)
+            if (!doc || !t) return null
+            return (
+              <div key={`${d.user_id}:${d.trial_id}`}
+                className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3 card-hover">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-[13px] font-semibold">{doc.full_name || doc.email}</span>
+                  <span className="text-[12px] text-[var(--muted)]">·</span>
+                  <span className="mono text-[11px] text-[var(--muted)]">{t.nct_id}</span>
+                  <span className="text-[13px]">{t.title_ru || t.title}</span>
+                </div>
+                <StageTracker stage={d.work_stage} editable onSetStage={(s) => setStage(d, s)} />
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
       {/* Врачи */}
       <section className="flex flex-col gap-3">
         <h2 className="text-[14px] font-semibold">Врачи</h2>
@@ -145,7 +179,7 @@ export default function AdminScreen() {
               className="flex-1 min-w-[200px] rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[13px] focus:outline-none focus:border-[var(--teal)]" />
             <button onClick={invite} disabled={!inviteEmail.includes('@')}
               className="px-4 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-40"
-              style={{ background: 'var(--teal)', color: '#040810' }}>
+              style={{ background: 'var(--teal)', color: 'var(--on-accent)' }}>
               Пригласить
             </button>
           </div>

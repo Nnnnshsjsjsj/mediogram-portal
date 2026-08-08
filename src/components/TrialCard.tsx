@@ -2,6 +2,13 @@ import { useState } from 'react'
 import type { Decision, Trial } from '../lib/types'
 import { CATEGORIES, scoreColor, scoreLabel, statusColor, statusLabel } from '../lib/types'
 
+function fmtDate(d: string | null): string {
+  if (!d) return ''
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return ''
+  return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 interface Props {
   trial: Trial
   decision?: Decision
@@ -17,12 +24,12 @@ export default function TrialCard({ trial, decision, watched, mode, onDecide, on
   const sc = trial.score
 
   return (
-    <article className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3">
+    <article className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3 card-hover">
       <header className="flex flex-wrap items-center gap-2">
         {sc != null && (
           <span className="mono text-[12px] font-semibold px-2 py-0.5 rounded-lg"
             title={scoreLabel(sc)}
-            style={{ color: '#040810', background: scoreColor(sc) }}>
+            style={{ color: 'var(--on-accent)', background: scoreColor(sc) }}>
             {sc >= 85 ? '🔥 ' : ''}{sc}
           </span>
         )}
@@ -37,18 +44,23 @@ export default function TrialCard({ trial, decision, watched, mode, onDecide, on
         {trial.phase && trial.phase !== 'NA' && (
           <span className="mono text-[11px] text-[var(--muted)]">{trial.phase}</span>
         )}
+        {fmtDate(trial.first_posted) && (
+          <span className="mono text-[11px] text-[var(--muted)] ml-auto" title="Дата публикации исследования">
+            {fmtDate(trial.first_posted)}
+          </span>
+        )}
       </header>
 
       <h3 className="text-[15px] font-semibold leading-snug">{title}</h3>
 
-      <p className={`text-[13px] leading-relaxed text-[var(--muted)] ${open ? 'whitespace-pre-line' : 'line-clamp-3'}`}>
+      <p className={`text-[13px] leading-relaxed ${open ? 'whitespace-pre-line' : 'line-clamp-3'}`} style={{ color: '#3A4A63' }}>
         {trial.summary_ru || '—'}
       </p>
 
       {open && (
         <div className="text-[13px] text-[var(--muted)] flex flex-col gap-2.5 border-t border-[var(--line)] pt-3">
           {sc != null && trial.score_reasons?.length > 0 && (
-            <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3 flex flex-col gap-1.5">
+            <div className="rounded-xl border border-[var(--line)] p-3 flex flex-col gap-1.5" style={{ background: "var(--teal-soft)" }}>
               <span className="text-[11px] uppercase tracking-wide font-semibold"
                 style={{ color: scoreColor(sc) }}>
                 Почему {sc} баллов
@@ -103,7 +115,7 @@ function TriageBtn({ label, color, active, onClick }: { label: string; color: st
     <button onClick={onClick}
       className="text-[13px] px-3.5 py-2 rounded-xl border font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--teal)]"
       style={active
-        ? { borderColor: color, color: '#040810', background: color }
+        ? { borderColor: color, color: 'var(--on-accent)', background: color }
         : { borderColor: 'var(--line)', color }}>
       {label}
     </button>

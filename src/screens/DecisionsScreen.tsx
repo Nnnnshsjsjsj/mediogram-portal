@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getLatestTrials, getMyDecisions, setStage, decide, clearDecision } from '../lib/api'
+import { getLatestTrials, getMyDecisions, decide, clearDecision } from '../lib/api'
 import { supabase } from '../lib/supabase'
-import type { Decision, DecisionStatus, Trial, WorkStage } from '../lib/types'
-import { CATEGORIES, STAGES, STAGE_ORDER } from '../lib/types'
+import type { Decision, DecisionStatus, Trial } from '../lib/types'
+import { CATEGORIES } from '../lib/types'
+import StageTracker from '../components/StageTracker'
 
 type Seg = DecisionStatus
 
@@ -38,11 +39,6 @@ export default function DecisionsScreen() {
     rejected: decisions.filter((d) => d.status === 'rejected').length,
   }), [decisions])
 
-  async function changeStage(d: Decision, stage: WorkStage) {
-    setDecisions((prev) => prev.map((x) => x.trial_id === d.trial_id ? { ...x, work_stage: stage } : x))
-    try { await setStage(d.trial_id, stage) } catch { /* обновление страницы вернёт истину */ }
-  }
-
   async function changeStatus(d: Decision, status: DecisionStatus) {
     setDecisions((prev) => prev.map((x) => x.trial_id === d.trial_id
       ? { ...x, status, work_stage: status === 'accepted' ? 'interest' : null } : x))
@@ -66,7 +62,7 @@ export default function DecisionsScreen() {
            ['rejected', `Отклонённые · ${counts.rejected}`]] as [Seg, string][]).map(([k, label]) => (
           <button key={k} onClick={() => setSeg(k)}
             className="px-3.5 py-2 text-[12px] font-medium transition-colors"
-            style={seg === k ? { background: 'var(--teal)', color: '#040810' } : { color: 'var(--muted)' }}>
+            style={seg === k ? { background: 'var(--teal)', color: 'var(--on-accent)' } : { color: 'var(--muted)' }}>
             {label}
           </button>
         ))}
@@ -81,7 +77,7 @@ export default function DecisionsScreen() {
           const t = trials.get(d.trial_id)
           if (!t) return null
           return (
-            <article key={d.trial_id} className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3">
+            <article key={d.trial_id} className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3 card-hover">
               <header className="flex flex-wrap items-center gap-2">
                 <span className="mono text-[11px] text-[var(--muted)]">{t.nct_id}</span>
                 <span className="text-[11px] px-2 py-0.5 rounded-full border border-[var(--line)] text-[var(--muted)]">
@@ -93,24 +89,9 @@ export default function DecisionsScreen() {
               <h3 className="text-[14px] font-semibold leading-snug">{t.title_ru || t.title}</h3>
 
               {seg === 'accepted' && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Этап работы</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {STAGE_ORDER.map((s, i) => {
-                      const activeIdx = STAGE_ORDER.indexOf(d.work_stage ?? 'interest')
-                      const state = i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'todo'
-                      return (
-                        <button key={s} onClick={() => changeStage(d, s)}
-                          className="text-[11px] px-2.5 py-1 rounded-full border transition-colors"
-                          style={
-                            state === 'active' ? { borderColor: 'var(--teal)', color: '#040810', background: 'var(--teal)' }
-                            : state === 'done' ? { borderColor: 'var(--teal)', color: 'var(--teal)' }
-                            : { borderColor: 'var(--line)', color: 'var(--muted)' }}>
-                          {STAGES[s]}
-                        </button>
-                      )
-                    })}
-                  </div>
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <span className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Этап работы — отмечает Mediogram</span>
+                  <StageTracker stage={d.work_stage} />
                 </div>
               )}
 

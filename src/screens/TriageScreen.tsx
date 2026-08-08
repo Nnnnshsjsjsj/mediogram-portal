@@ -127,7 +127,7 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
           {(['current', 'upcoming'] as SubTab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)}
               className="px-4 py-2 text-[13px] font-medium transition-colors"
-              style={tab === t ? { background: 'var(--teal)', color: '#040810' } : { color: 'var(--muted)' }}>
+              style={tab === t ? { background: 'var(--teal)', color: 'var(--on-accent)' } : { color: 'var(--muted)' }}>
               {t === 'current' ? 'Актуальные' : 'Будущие'}
             </button>
           ))}
@@ -169,13 +169,17 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
       )}
 
       <div className="flex flex-col gap-3">
-        {tab === 'current' && pending.map((t) => (
-          <TrialCard key={t.id} trial={t} mode="triage" decision={decisions.get(t.id)}
-            onDecide={(s) => handleDecide(t, s)} />
+        {tab === 'current' && pending.map((t, i) => (
+          <div key={t.id} className={`rise rise-${Math.min(i + 1, 6)}`}>
+            <TrialCard trial={t} mode="triage" decision={decisions.get(t.id)}
+              onDecide={(s) => handleDecide(t, s)} />
+          </div>
         ))}
-        {tab === 'upcoming' && visible.map((t) => (
-          <TrialCard key={t.id} trial={t} mode="upcoming" watched={watches.has(t.id)}
-            onToggleWatch={(on) => handleWatch(t, on)} />
+        {tab === 'upcoming' && visible.map((t, i) => (
+          <div key={t.id} className={`rise rise-${Math.min(i + 1, 6)}`}>
+            <TrialCard trial={t} mode="upcoming" watched={watches.has(t.id)}
+              onToggleWatch={(on) => handleWatch(t, on)} />
+          </div>
         ))}
         {tab === 'current' && pending.length === 0 && (
           <Centered>{visible.length ? 'Все исследования недели разобраны 🎉' : 'В этом выпуске нет исследований по вашим фильтрам.'}</Centered>
@@ -186,8 +190,9 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
       </div>
 
       {undo && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3
-                        rounded-xl border border-[var(--line)] bg-[var(--card)] px-4 py-2.5 shadow-xl">
+        <div className="fixed bottom-5 left-1/2 z-50 flex items-center gap-3 toast-in
+                        rounded-xl border border-[var(--line)] bg-[var(--card)] px-4 py-2.5"
+             style={{ boxShadow: 'var(--shadow-lift)' }}>
           <span className="text-[13px]">Решение сохранено</span>
           <button onClick={handleUndo} className="text-[13px] font-semibold text-[var(--teal)]">Отменить</button>
         </div>
