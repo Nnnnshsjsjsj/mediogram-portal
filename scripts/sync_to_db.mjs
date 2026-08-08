@@ -75,10 +75,7 @@ async function main() {
       return {
         nct_id: String(l.nct),
         title: String(l.title),
-        title_ru: l.title_ru ? String(l.title_ru) : null,
-        // summary у бота описывает КОМПАНИЮ-спонсора, а не исследование —
-        // врачу он не нужен. Ждём summary_ru от enrich_ru.mjs.
-        summary_ru: String(l.summary_ru ?? ''),
+        // title_ru / summary_ru / score_reasons пишет только enrich_ru.mjs.
         category: String(l.category ?? deriveCategory(l)),
         recruitment_status: status,
         is_upcoming: isUpcoming(status),
@@ -87,9 +84,6 @@ async function main() {
         countries: Array.isArray(l.countries) ? l.countries : [],
         conditions: Array.isArray(l.conditions) ? l.conditions : [],
         score: Number.isFinite(Number(l.score)) ? Number(l.score) : null,
-        score_reasons: Array.isArray(l.score_reasons) ? l.score_reasons
-          : Array.isArray(l.why) ? l.why
-          : (typeof l.why === 'string' && l.why ? [l.why] : []),
         source_url: String(l.url ?? `https://clinicaltrials.gov/study/${l.nct}`),
         first_posted: l.posted || l.first_posted || null,
         last_updated_at: new Date().toISOString(),
@@ -141,7 +135,7 @@ async function main() {
 
   console.log(`Выпуск ${week}: current=${current.length}, upcoming=${upcoming.length} (отобрано из ${upserted.length})`)
   // Строка для Slack-репорта в workflow:
-  console.log(`::notice::Digest ${week} — current ${cur}, upcoming ${upc}`)
+  console.log(`::notice::Digest ${week} — current ${current.length}, upcoming ${upcoming.length}`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

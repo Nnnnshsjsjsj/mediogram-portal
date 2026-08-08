@@ -146,7 +146,14 @@ async function main() {
   for (const t of pending) {
     try {
       const ctg = await fetchCtg(t.nct_id)
-      const ru = await writeRussian(t, ctg)
+      let ru
+      try {
+        ru = await writeRussian(t, ctg)
+      } catch (first) {
+        console.warn(`  … ${t.nct_id}: повтор после «${first.message.slice(0, 80)}»`)
+        await new Promise((r) => setTimeout(r, 1500))
+        ru = await writeRussian(t, ctg)
+      }
       const { error: uErr } = await db.from('trials').update({
         title_ru: ru.title_ru,
         summary_ru: ru.summary_ru,
