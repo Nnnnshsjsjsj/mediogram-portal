@@ -1,0 +1,31 @@
+name: Weekly digest
+on:
+  schedule:
+    - cron: "0 5 * * 1"   # понедельник 05:00 UTC = 07:00 CET
+  workflow_dispatch:
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Fetch latest radar output
+        run: |
+          mkdir -p out
+          curl -fsSL https://raw.githubusercontent.com/Nnnnshsjsjsj/mediogram-radar-app/main/out/latest.json -o out/latest.json
+          echo "Leads: $(node -e 'console.log(JSON.parse(require("fs").readFileSync("out/latest.json")).leads?.length ?? 0)')"
+      - name: Sync to Supabase
+        run: node scripts/sync_to_db.mjs out/latest.json
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Send digest emails
+        run: node scripts/send_digest.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PORTAL_URL: ${{ secrets.PORTAL_URL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
