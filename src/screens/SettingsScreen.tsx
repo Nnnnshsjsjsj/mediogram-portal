@@ -8,17 +8,15 @@ export default function SettingsScreen({ profile, onSaved }: { profile: Profile;
   const [name, setName] = useState(profile.full_name)
   const [specialty, setSpecialty] = useState(profile.specialty ?? '')
   const [cats, setCats] = useState<Set<string>>(new Set(profile.categories))
-  const [cc, setCc] = useState(profile.cc_emails.join(', '))
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   async function save() {
     setSaving(true); setSaved(false)
     const categories = [...cats]
-    const cc_emails = cc.split(/[,;\s]+/).map((s) => s.trim()).filter((s) => s.includes('@'))
     try {
-      await updateMyProfile({ full_name: name, specialty, categories, cc_emails })
-      onSaved({ ...profile, full_name: name, specialty, categories, cc_emails })
+      await updateMyProfile({ full_name: name, specialty, categories })
+      onSaved({ ...profile, full_name: name, specialty, categories })
       setSaved(true)
     } finally { setSaving(false) }
   }
@@ -56,10 +54,6 @@ export default function SettingsScreen({ profile, onSaved }: { profile: Profile;
         </div>
       </Field>
 
-      <Field label="Коллеги в копии письма" hint="Email-адреса через запятую. Они получат еженедельный отчёт в CC.">
-        <input value={cc} onChange={(e) => setCc(e.target.value)}
-          placeholder="kolleg1@clinic.by, kolleg2@clinic.by" className={inputCls} />
-      </Field>
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving}

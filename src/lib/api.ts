@@ -9,7 +9,7 @@ export async function getMyProfile(): Promise<Profile | null> {
   return data as Profile
 }
 
-export async function updateMyProfile(patch: Partial<Pick<Profile, 'full_name' | 'specialty' | 'categories' | 'cc_emails'>>) {
+export async function updateMyProfile(patch: Partial<Pick<Profile, 'full_name' | 'specialty' | 'categories'>>) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('no session')
   const { error } = await supabase.from('profiles').update(patch).eq('id', user.id)

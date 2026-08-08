@@ -96,7 +96,6 @@ async function main() {
     await sendResend({
       from: FROM_EMAIL,
       to: [doc.email],
-      cc: (doc.cc_emails ?? []).slice(0, 10),
       subject: `Радар исследований · неделя ${digest.week_start} · ${current.length} новых`,
       html: emailHtml(doc.full_name, digest.week_start, current, upcoming),
     })

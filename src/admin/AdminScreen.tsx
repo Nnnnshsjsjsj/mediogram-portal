@@ -159,7 +159,7 @@ export default function AdminScreen() {
                 <div className="mono text-[11px] text-[var(--muted)]">{d.email}</div>
               </div>
               <div className="text-[11px] text-[var(--muted)]">
-                {d.specialty || 'без специальности'} · подписки: {d.categories.length || 'все'} · CC: {d.cc_emails.length}
+                {d.specialty || 'без специальности'} · подписки: {d.categories.length || 'все'}
               </div>
               <button onClick={async () => { await adminUpdateDoctor(d.id, { is_active: !d.is_active }); loadAll() }}
                 className="ml-auto text-[12px] hover:underline"
