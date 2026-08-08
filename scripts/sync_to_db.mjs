@@ -76,7 +76,9 @@ async function main() {
         nct_id: String(l.nct),
         title: String(l.title),
         title_ru: l.title_ru ? String(l.title_ru) : null,
-        summary_ru: String(l.summary_ru ?? l.summary ?? ''),
+        // summary у бота описывает КОМПАНИЮ-спонсора, а не исследование —
+        // врачу он не нужен. Ждём summary_ru от enrich_ru.mjs.
+        summary_ru: String(l.summary_ru ?? ''),
         category: String(l.category ?? deriveCategory(l)),
         recruitment_status: status,
         is_upcoming: isUpcoming(status),
@@ -91,7 +93,14 @@ async function main() {
         source_url: String(l.url ?? `https://clinicaltrials.gov/study/${l.nct}`),
         first_posted: l.posted || l.first_posted || null,
         last_updated_at: new Date().toISOString(),
-        raw: l,
+        // ВАЖНО: в raw кладём только клинические поля.
+        // Контакты и outreach-тексты (email, phone, contact_name, pi, opener,
+        // angle, who, channel) НЕ попадают в БД — trials читают все врачи.
+        raw: {
+          tier: l.tier ?? null,
+          modality: l.modality ?? null,
+          region_sites: Array.isArray(l.region_sites) ? l.region_sites : [],
+        },
       }
     })
 
