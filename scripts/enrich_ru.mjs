@@ -87,7 +87,8 @@ async function writeRussian(trial, ctg) {
 {
   "title_ru": "заголовок исследования по-русски, понятный кардиологу, до 110 символов",
   "summary_ru": "Суть: ...\\nМетодология: ...\\nЗначимость: ...",
-  "score_reasons": ["строка 1", "строка 2", "строка 3"]
+  "score_reasons": ["строка 1", "строка 2", "строка 3"],
+  "category": "один код из списка ниже"
 }
 
 title_ru — суть исследования, а не дословный перевод.
@@ -95,7 +96,8 @@ summary_ru — ровно три абзаца, разделённых перев
   Суть: что изучают и у каких пациентов.
   Методология: дизайн, рандомизация/ослепление, число пациентов, первичная конечная точка.
   Значимость: почему результат может повлиять на практику.
-score_reasons — 3-5 коротких строк: почему исследование получило балл ${facts.radar_score}. Опирайся на статус набора, фазу, страны центров, спонсора и попадание в профиль (${facts.category}). Каждая строка — до 100 символов.`
+score_reasons — 3-5 коротких строк: почему исследование получило балл ${facts.radar_score}. Опирайся на статус набора, фазу, страны центров, спонсора и попадание в профиль (${facts.category}). Каждая строка — до 100 символов.
+category — определи по КЛИНИЧЕСКОЙ сути исследования (не по названию устройства и не по слову «ablation»), строго один код: arrhythmia (нарушения ритма, ЭФИ, аблация аритмий, стимуляторы/ИКД), structural (клапаны, окклюдеры, TAVR/LAA), hf (сердечная недостаточность), mcs (мех. поддержка кровообращения, шок), antithrombotic (антикоагулянты/антиагреганты), antiarrhythmic (антиаритмические препараты), devices (кардио-устройства вне прочих категорий), other (НЕ кардиологическое исследование — напр., щитовидная железа, онкология).`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -122,6 +124,7 @@ score_reasons — 3-5 коротких строк: почему исследов
     summary_ru: String(parsed.summary_ru),
     score_reasons: Array.isArray(parsed.score_reasons)
       ? parsed.score_reasons.map(String).slice(0, 6) : [],
+    category: ['arrhythmia','structural','hf','mcs','antithrombotic','antiarrhythmic','devices','other'].includes(parsed.category) ? parsed.category : null,
   }
 }
 
@@ -154,12 +157,17 @@ async function main() {
         await new Promise((r) => setTimeout(r, 1500))
         ru = await writeRussian(t, ctg)
       }
-      const { error: uErr } = await db.from('trials').update({
+      const patch = {
         title_ru: ru.title_ru,
         summary_ru: ru.summary_ru,
         score_reasons: ru.score_reasons.length ? ru.score_reasons : t.score_reasons,
         last_updated_at: new Date().toISOString(),
-      }).eq('id', t.id)
+      }
+      if (ru.category && ru.category !== t.category) {
+        patch.category = ru.category
+        console.log(`    категория: ${t.category} → ${ru.category}`)
+      }
+      const { error: uErr } = await db.from('trials').update(patch).eq('id', t.id)
       if (uErr) throw uErr
       ok++
       console.log(`  ✓ ${t.nct_id} — ${ru.title_ru.slice(0, 60)}…`)
