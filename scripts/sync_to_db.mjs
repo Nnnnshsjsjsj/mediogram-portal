@@ -141,7 +141,7 @@ async function main() {
 
   console.log(`Выпуск ${week}: current=${current.length}, upcoming=${upcoming.length} (отобрано из ${upserted.length})`)
   // Строка для Slack-репорта в workflow:
-  console.log(`::notice::Digest ${week} — current ${cur}, upcoming ${upc}`)
+  console.log(`::notice::Digest ${week} — current ${current.length}, upcoming ${upcoming.length}`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })
