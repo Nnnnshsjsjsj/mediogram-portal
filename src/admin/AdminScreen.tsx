@@ -23,7 +23,7 @@ export default function AdminScreen() {
   }
   useEffect(() => { loadAll() }, [])
 
-  const activeDoctors = useMemo(() => doctors.filter((d) => d.role === 'doctor' && d.is_active), [doctors])
+  const activeDoctors = useMemo(() => doctors.filter((d) => d.is_active), [doctors])
   const decMap = useMemo(() => {
     const m = new Map<string, Decision>()
     for (const d of decisions) m.set(`${d.user_id}:${d.trial_id}`, d)
