@@ -15,7 +15,11 @@ jobs:
       - name: Fetch latest radar output
         run: |
           mkdir -p out
-          curl -fsSL https://raw.githubusercontent.com/Nnnnshsjsjsj/mediogram-radar-app/main/out/latest.json -o out/latest.json
+          curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/Nnnnshsjsjsj/mediogram-radar-app/contents/out/latest.json?ref=main" \
+            -o out/latest.json
           echo "Leads: $(node -e 'console.log(JSON.parse(require("fs").readFileSync("out/latest.json")).leads?.length ?? 0)')"
 
       - name: Sync to Supabase
