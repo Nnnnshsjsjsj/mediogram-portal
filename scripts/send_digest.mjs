@@ -75,8 +75,14 @@ async function main() {
     .select('section, rank, trials(*)').eq('digest_id', digest.id).order('rank')
   const all = (dt ?? []).map((r) => ({ ...r.trials, __section: r.section }))
 
+  // Роли в проекте фактически все 'admin' — фильтр по role='doctor' молча
+  // обнулял рассылку. Получатель выпуска = любой активный профиль.
   const { data: doctors } = await db.from('profiles').select('*')
-    .eq('role', 'doctor').eq('is_active', true)
+    .eq('is_active', true)
+  if (!doctors?.length) {
+    console.error('Нет активных профилей — рассылать некому')
+    process.exit(1)
+  }
 
   // Идемпотентность: кто уже получил этот выпуск.
   const { data: sentLog } = await db.from('activity_log').select('user_id')
@@ -108,6 +114,11 @@ async function main() {
   }
   console.log(`Отправлено: ${sent}, пропущено: ${skipped}`)
   console.log(`::notice::Digest emails — sent ${sent}, skipped ${skipped}`)
+  // Ноль отправок — это отказ, а не успех: пайплайн обязан краснеть.
+  if (sent === 0) {
+    console.error('::error::Ни одного письма не отправлено')
+    process.exit(1)
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })
