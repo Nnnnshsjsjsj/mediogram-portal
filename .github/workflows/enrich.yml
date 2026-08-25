@@ -1,0 +1,25 @@
+name: Enrich RU descriptions
+# Ручной добор русских описаний: заполняет только те исследования текущего
+# выпуска, у которых summary_ru пустой. Выпуск не пересобирает и писем не шлёт.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Сколько исследований обработать за прогон"
+        required: false
+        default: "25"
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Write Russian descriptions
+        run: node scripts/enrich_ru.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ENRICH_LIMIT: ${{ inputs.limit }}
