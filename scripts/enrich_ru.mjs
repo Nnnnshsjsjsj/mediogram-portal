@@ -149,14 +149,18 @@ async function main() {
   for (const t of pending) {
     try {
       const ctg = await fetchCtg(t.nct_id)
-      let ru
-      try {
-        ru = await writeRussian(t, ctg)
-      } catch (first) {
-        console.warn(`  … ${t.nct_id}: повтор после «${first.message.slice(0, 80)}»`)
-        await new Promise((r) => setTimeout(r, 1500))
-        ru = await writeRussian(t, ctg)
+      if (!ctg) console.warn(`  … ${t.nct_id}: ClinicalTrials.gov не ответил, пишем по данным радара`)
+      // Три попытки с нарастающей паузой: чаще всего падает разбор JSON
+      // от модели или временный 429/529 от API.
+      let ru, lastErr
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try { ru = await writeRussian(t, ctg); break } catch (e) {
+          lastErr = e
+          console.warn(`  … ${t.nct_id}: попытка ${attempt}/3 не удалась — ${e.message.slice(0, 120)}`)
+          if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000))
+        }
       }
+      if (!ru) throw lastErr
       const patch = {
         title_ru: ru.title_ru,
         summary_ru: ru.summary_ru,
@@ -173,12 +177,18 @@ async function main() {
       console.log(`  ✓ ${t.nct_id} — ${ru.title_ru.slice(0, 60)}…`)
     } catch (e) {
       failed++
-      console.error(`  ✗ ${t.nct_id}: ${e.message}`)
+      // Карточка без русского текста показывает врачу прочерк, поэтому
+      // отказ должен быть виден в Actions, а не теряться в логе.
+      console.error(`::error::${t.nct_id} остался без русского описания — ${e.message.slice(0, 200)}`)
     }
     await new Promise((r) => setTimeout(r, 700)) // бережём rate limit
   }
   console.log(`Готово: переведено ${ok}, ошибок ${failed}`)
   console.log(`::notice::Enrich RU — ok ${ok}, failed ${failed}`)
+  if (failed > 0) {
+    console.error(`::error::${failed} из ${pending.length} исследований выпуска без русского описания`)
+    process.exit(1)
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

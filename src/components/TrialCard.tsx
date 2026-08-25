@@ -54,7 +54,7 @@ export default function TrialCard({ trial, decision, watched, mode, onDecide, on
       <h3 className="text-[15px] font-semibold leading-snug">{title}</h3>
 
       <p className={`text-[13px] leading-relaxed ${open ? 'whitespace-pre-line' : 'line-clamp-3'}`} style={{ color: '#3A4A63' }}>
-        {trial.summary_ru || '—'}
+        {trial.summary_ru || 'Русское описание пока не готово — нажмите «Подробнее» и откройте первоисточник на ClinicalTrials.gov.'}
       </p>
 
       {open && (
