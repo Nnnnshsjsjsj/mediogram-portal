@@ -83,18 +83,39 @@ function LoginScreen() {
 
   async function sendLink() {
     setBusy(true); setErr('')
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: window.location.origin + import.meta.env.BASE_URL,
-        shouldCreateUser: false, // регистрация закрыта: аккаунты создаёт админ
-      },
-    })
-    setBusy(false)
-    if (error) setErr(error.message.includes('Signups not allowed') || error.message.includes('signups')
-      ? 'Этот email не зарегистрирован. Обратитесь к администратору Mediogram.'
-      : error.message)
-    else setSent(true)
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: window.location.origin + import.meta.env.BASE_URL,
+          shouldCreateUser: false, // регистрация закрыта: аккаунты создаёт админ
+        },
+      })
+      if (!error) { setSent(true); return }
+
+      // supabase-js кладёт в message JSON.stringify(тела ответа), если сервер
+      // не прислал msg/message/error_description — тогда на экране видно "{}".
+      // Поэтому всегда показываем status + code, иначе диагностировать нечем.
+      const code = (error as { code?: string }).code
+      const detail = [error.status, code].filter(Boolean).join(' ')
+      console.error('[auth] signInWithOtp failed', {
+        name: error.name, status: error.status, code, message: error.message,
+      })
+
+      if (/signups? not allowed|otp_disabled/i.test(`${error.message} ${code ?? ''}`)) {
+        setErr('Этот email не зарегистрирован. Обратитесь к администратору Mediogram.')
+      } else if (/over_email_send_rate_limit|rate limit/i.test(`${error.message} ${code ?? ''}`) || error.status === 429) {
+        setErr('Слишком много запросов. Подождите минуту и попробуйте снова.')
+      } else {
+        const msg = !error.message || error.message === '{}' ? 'Сервис авторизации вернул пустую ошибку' : error.message
+        setErr(detail ? `${msg} (${detail})` : msg)
+      }
+    } catch (e) {
+      console.error('[auth] signInWithOtp threw', e)
+      setErr(`Не удалось связаться с сервисом авторизации: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
