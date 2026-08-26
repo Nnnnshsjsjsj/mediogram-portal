@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getLatestTrials, getMyDecisions, decide, clearDecision } from '../lib/api'
+import { getLatestTrials, getMyDecisions, decide, clearDecision, setDecisionNote, getMyGroups } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import type { Decision, DecisionStatus, Trial } from '../lib/types'
 import { CATEGORIES } from '../lib/types'
@@ -12,6 +12,7 @@ export default function DecisionsScreen() {
   const [trials, setTrials] = useState<Map<string, Trial>>(new Map())
   const [seg, setSeg] = useState<Seg>('accepted')
   const [loading, setLoading] = useState(true)
+  const [inGroup, setInGroup] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -28,6 +29,7 @@ export default function DecisionsScreen() {
         for (const t of trials) map.set(t.id, t)
       }
       setTrials(map)
+      setInGroup((await getMyGroups()).length > 0)
       setLoading(false)
     })()
   }, [])
@@ -43,6 +45,12 @@ export default function DecisionsScreen() {
     setDecisions((prev) => prev.map((x) => x.trial_id === d.trial_id
       ? { ...x, status, work_stage: status === 'accepted' ? 'interest' : null } : x))
     try { await decide(d.trial_id, status) } catch { /* no-op */ }
+  }
+
+  async function saveNote(d: Decision, note: string) {
+    const clean = note.trim() || null
+    setDecisions((prev) => prev.map((x) => x.trial_id === d.trial_id ? { ...x, note: clean } : x))
+    try { await setDecisionNote(d.trial_id, note) } catch { /* no-op */ }
   }
 
   async function remove(d: Decision) {
@@ -95,6 +103,8 @@ export default function DecisionsScreen() {
                 </div>
               )}
 
+              <NoteEditor note={d.note} shared={inGroup} onSave={(n) => saveNote(d, n)} />
+
               <footer className="flex gap-2 flex-wrap text-[12px]">
                 {seg !== 'accepted' && (
                   <ActionLink onClick={() => changeStatus(d, 'accepted')} color="var(--green)">Принять</ActionLink>
@@ -110,6 +120,44 @@ export default function DecisionsScreen() {
             </article>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function NoteEditor({ note, shared, onSave }: { note: string | null; shared: boolean; onSave: (n: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(note ?? '')
+
+  if (!editing) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {note && (
+          <p className="text-[12px] leading-relaxed whitespace-pre-line rounded-lg px-3 py-2"
+            style={{ background: 'var(--panel)' }}>{note}</p>
+        )}
+        <button onClick={() => { setDraft(note ?? ''); setEditing(true) }}
+          className="text-[12px] text-[var(--teal)] hover:underline self-start">
+          {note ? 'Изменить заметку' : 'Добавить заметку'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3}
+        placeholder="Например: подходит по профилю центра, жду ответ спонсора"
+        className="rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[13px] resize-y focus:outline-none focus:border-[var(--teal)]" />
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={() => { onSave(draft); setEditing(false) }}
+          className="px-3.5 py-1.5 rounded-xl text-[12px] font-semibold"
+          style={{ background: 'var(--teal)', color: 'var(--on-accent)' }}>Сохранить</button>
+        <button onClick={() => setEditing(false)}
+          className="text-[12px] text-[var(--muted)] hover:underline">Отмена</button>
+        <span className="text-[11px] text-[var(--muted)] ml-auto">
+          {shared ? 'Заметку увидят коллеги по вашей группе' : 'Заметку видите вы и администратор'}
+        </span>
       </div>
     </div>
   )
