@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
-import { getMyProfile, logEvent } from './lib/api'
+import { getMyGroups, getMyProfile, logEvent } from './lib/api'
 import type { Profile } from './lib/types'
 import TriageScreen from './screens/TriageScreen'
 import DecisionsScreen from './screens/DecisionsScreen'
+import GroupScreen from './screens/GroupScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import AdminScreen from './admin/AdminScreen'
 
-type Tab = 'triage' | 'decisions' | 'settings' | 'admin'
+type Tab = 'triage' | 'decisions' | 'group' | 'settings' | 'admin'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [tab, setTab] = useState<Tab>('triage')
+  const [inGroup, setInGroup] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -30,7 +32,10 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (session) getMyProfile().then(setProfile).catch(console.error)
+    if (!session) return
+    getMyProfile().then(setProfile).catch(console.error)
+    // Вкладка «Группа» появляется, только если врача уже добавили в группу.
+    getMyGroups().then((gs) => setInGroup(gs.length > 0)).catch(console.error)
   }, [session])
 
   if (!authReady) return <FullScreen><Spinner text="Проверка сессии…" /></FullScreen>
@@ -41,6 +46,7 @@ export default function App() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'triage', label: 'Триаж' },
     { id: 'decisions', label: 'Мои решения' },
+    ...(inGroup ? [{ id: 'group' as Tab, label: 'Группа' }] : []),
     { id: 'settings', label: 'Настройки' },
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Админ' }] : []),
   ]
@@ -68,6 +74,7 @@ export default function App() {
       <main className="mx-auto max-w-4xl px-4 py-6 pb-24">
         {tab === 'triage' && <TriageScreen profile={profile} />}
         {tab === 'decisions' && <DecisionsScreen />}
+        {tab === 'group' && inGroup && <GroupScreen profile={profile} />}
         {tab === 'settings' && <SettingsScreen profile={profile} onSaved={setProfile} />}
         {tab === 'admin' && isAdmin && <AdminScreen />}
       </main>

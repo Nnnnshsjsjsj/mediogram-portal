@@ -56,6 +56,42 @@ export interface Decision {
   decided_at: string
 }
 
+export interface Group {
+  id: string
+  name: string
+  created_at?: string
+}
+
+export interface GroupMember {
+  group_id: string
+  user_id: string
+  added_at?: string
+}
+
+// Профиль коллеги по группе — то, что отдаёт RLS-политика profiles_group_read.
+export interface Peer {
+  id: string
+  full_name: string
+  email: string
+  specialty: string | null
+}
+
+export function peerName(p: { full_name: string; email: string }): string {
+  return p.full_name || p.email.split('@')[0]
+}
+
+export const STATUS_GLYPH: Record<DecisionStatus, string> = {
+  accepted: '✅',
+  rejected: '❌',
+  deferred: '🕐',
+}
+
+export const STATUS_LABEL: Record<DecisionStatus, string> = {
+  accepted: 'Принято',
+  rejected: 'Отклонено',
+  deferred: 'Отложено',
+}
+
 export interface Digest {
   id: string
   week_start: string

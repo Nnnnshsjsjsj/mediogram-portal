@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
-import type { Decision, DecisionStatus, Profile, Trial, WorkStage } from './types'
+import type { Decision, DecisionStatus, Group, GroupMember, Peer, Profile, Trial, WorkStage } from './types'
+import { peerName } from './types'
 
 export async function getMyProfile(): Promise<Profile | null> {
   const { data: { user } } = await supabase.auth.getUser()
@@ -138,10 +139,101 @@ export async function adminSetStage(userId: string, trialId: string, stage: Work
 }
 
 // Приглашение нового врача — через Edge Function (service role живёт на сервере).
-export async function adminInvite(email: string, fullName: string) {
+export async function adminInvite(email: string, fullName: string, groupId?: string | null) {
   const { data, error } = await supabase.functions.invoke('admin-invite', {
-    body: { email, full_name: fullName },
+    body: { email, full_name: fullName, group_id: groupId || null },
   })
   if (error) throw error
   return data
+}
+
+// -------- заметки врача --------
+// Заметку видит сам врач, его группа и админ. Пустая строка стирает заметку.
+export async function setDecisionNote(trialId: string, note: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('no session')
+  const { error } = await supabase.from('decisions')
+    .update({ note: note.trim() || null })
+    .eq('user_id', user.id).eq('trial_id', trialId)
+  if (error) throw error
+}
+
+// -------- группы --------
+// Группы, в которых состоит текущий пользователь. RLS сам ограничивает выдачу.
+export async function getMyGroups(): Promise<Group[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('group_members').select('groups(id, name)').eq('user_id', user.id)
+  if (error) throw error
+  return (data ?? [])
+    .map((r) => r.groups as unknown as Group)
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+}
+
+// Состав группы вместе с профилями коллег.
+export async function getGroupPeers(groupId: string): Promise<Peer[]> {
+  const { data, error } = await supabase
+    .from('group_members')
+    .select('user_id, profiles(id, full_name, email, specialty, is_active)')
+    .eq('group_id', groupId)
+  if (error) throw error
+  return (data ?? [])
+    .map((r) => r.profiles as unknown as (Peer & { is_active: boolean }))
+    .filter((p) => p && p.is_active)
+    .sort((a, b) => peerName(a).localeCompare(peerName(b), 'ru'))
+}
+
+// Решения коллег по группе. Политика decisions_group_read отдаёт только
+// тех, с кем есть общая группа, поэтому фильтруем по составу на клиенте.
+export async function getGroupDecisions(peerIds: string[]): Promise<Decision[]> {
+  if (!peerIds.length) return []
+  const { data, error } = await supabase
+    .from('decisions').select('*').in('user_id', peerIds)
+  if (error) throw error
+  return (data ?? []) as Decision[]
+}
+
+// -------- админ: группы --------
+export async function adminGetGroups(): Promise<Group[]> {
+  const { data, error } = await supabase.from('groups').select('*').order('name')
+  if (error) throw error
+  return (data ?? []) as Group[]
+}
+
+export async function adminGetGroupMembers(): Promise<GroupMember[]> {
+  const { data, error } = await supabase.from('group_members').select('group_id, user_id')
+  if (error) throw error
+  return (data ?? []) as GroupMember[]
+}
+
+export async function adminCreateGroup(name: string): Promise<Group> {
+  const { data, error } = await supabase
+    .from('groups').insert({ name: name.trim() }).select().single()
+  if (error) throw error
+  return data as Group
+}
+
+export async function adminRenameGroup(id: string, name: string) {
+  const { error } = await supabase.from('groups').update({ name: name.trim() }).eq('id', id)
+  if (error) throw error
+}
+
+// Удаление группы не трогает ни врачей, ни их решения — только состав (cascade).
+export async function adminDeleteGroup(id: string) {
+  const { error } = await supabase.from('groups').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function adminAddMember(groupId: string, userId: string) {
+  const { error } = await supabase.from('group_members')
+    .upsert({ group_id: groupId, user_id: userId })
+  if (error) throw error
+}
+
+export async function adminRemoveMember(groupId: string, userId: string) {
+  const { error } = await supabase.from('group_members')
+    .delete().eq('group_id', groupId).eq('user_id', userId)
+  if (error) throw error
 }
