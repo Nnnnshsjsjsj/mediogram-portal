@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Decision, DecisionStatus, Group, GroupMember, Peer, Profile, Trial, WorkStage } from './types'
+import type { Decision, DecisionStatus, Group, GroupMember, Peer, Profile, Trial, TrialContacts, TrialContactsData, WorkStage } from './types'
 import { peerName } from './types'
 
 export async function getMyProfile(): Promise<Profile | null> {
@@ -38,6 +38,15 @@ export async function getLatestTrials(): Promise<{ weekStart: string | null; tri
     .order('first_seen_at', { ascending: false }).limit(60)
   if (error) throw error
   return { weekStart: null, trials: (data ?? []) as Trial[] }
+}
+
+// Исследования по списку id — принятые решения бывают из прошлых выпусков,
+// которых уже нет в getLatestTrials().
+export async function getTrialsByIds(ids: string[]): Promise<Trial[]> {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from('trials').select('*').in('id', ids)
+  if (error) throw error
+  return (data ?? []) as Trial[]
 }
 
 export async function getMyDecisions(): Promise<Decision[]> {
@@ -236,4 +245,27 @@ export async function adminRemoveMember(groupId: string, userId: string) {
   const { error } = await supabase.from('group_members')
     .delete().eq('group_id', groupId).eq('user_id', userId)
   if (error) throw error
+}
+
+// -------- админ: контакты спонсоров --------
+// Таблица trial_contacts закрыта политикой is_admin(): врач её не видит,
+// поэтому эти функции живут только в админ-панели.
+
+export async function adminGetTrialContacts(trialIds: string[]): Promise<Map<string, TrialContacts>> {
+  const map = new Map<string, TrialContacts>()
+  if (!trialIds.length) return map
+  const { data, error } = await supabase
+    .from('trial_contacts').select('*').in('trial_id', trialIds)
+  if (error) throw error
+  for (const row of (data ?? []) as TrialContacts[]) map.set(row.trial_id, row)
+  return map
+}
+
+// Кнопка «Обновить контакты»: тянем свежее из ClinicalTrials.gov (см. lib/ctg.ts)
+// и кладём в кэш, чтобы следующая загрузка панели была мгновенной.
+export async function adminSaveTrialContacts(trialId: string, data: TrialContactsData): Promise<TrialContacts> {
+  const row = { trial_id: trialId, ...data, fetched_at: new Date().toISOString() }
+  const { error } = await supabase.from('trial_contacts').upsert(row, { onConflict: 'trial_id' })
+  if (error) throw error
+  return row as TrialContacts
 }

@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   adminAddMember, adminCreateGroup, adminDeleteGroup, adminGetActivity, adminGetAllDecisions,
-  adminGetDoctors, adminGetGroupMembers, adminGetGroups, adminInvite, adminRemoveMember,
-  adminRenameGroup, adminSetStage, adminUpdateDoctor, getLatestTrials,
+  adminGetDoctors, adminGetGroupMembers, adminGetGroups, adminGetTrialContacts, adminInvite,
+  adminRemoveMember, adminRenameGroup, adminSaveTrialContacts, adminSetStage, adminUpdateDoctor,
+  getLatestTrials, getTrialsByIds,
 } from '../lib/api'
+import { fetchTrialContacts } from '../lib/ctg'
 import StageTracker from '../components/StageTracker'
-import type { Decision, Group, GroupMember, Profile, Trial, WorkStage } from '../lib/types'
+import TrialCard from '../components/TrialCard'
+import ContactPanel from '../components/ContactPanel'
+import type { Decision, Group, GroupMember, Profile, Trial, TrialContacts, WorkStage } from '../lib/types'
 import { STAGES, peerName } from '../lib/types'
 
 export default function AdminScreen() {
@@ -22,15 +26,30 @@ export default function AdminScreen() {
   const [members, setMembers] = useState<GroupMember[]>([])
   const [newGroup, setNewGroup] = useState('')
   const [groupMsg, setGroupMsg] = useState('')
+  const [contacts, setContacts] = useState<Map<string, TrialContacts>>(new Map())
+  const [contactBusy, setContactBusy] = useState<Set<string>>(new Set())
+  const [contactErr, setContactErr] = useState<Map<string, string>>(new Map())
+  // Автодобор контактов запускаем один раз на исследование за сессию.
+  const autoTried = useRef<Set<string>>(new Set())
+  const autoRunning = useRef(false)
 
   async function loadAll() {
-    const [docs, decs, { trials }, act, gs, ms] = await Promise.all([
+    const [docs, decs, { trials: latest }, act, gs, ms] = await Promise.all([
       adminGetDoctors(), adminGetAllDecisions(), getLatestTrials(), adminGetActivity(30),
       adminGetGroups(), adminGetGroupMembers(),
     ])
-    setDoctors(docs); setDecisions(decs); setTrials(trials); setActivity(act as typeof activity)
+    // Решение может быть по исследованию из прошлого выпуска — такие карточки
+    // раньше просто пропадали из панели. Дотягиваем их по id.
+    const byId = new Map(latest.map((t) => [t.id, t]))
+    const missing = [...new Set(decs.map((d) => d.trial_id))].filter((id) => !byId.has(id))
+    for (const t of await getTrialsByIds(missing)) byId.set(t.id, t)
+
+    setDoctors(docs); setDecisions(decs); setTrials([...byId.values()]); setActivity(act as typeof activity)
     setGroups(gs); setMembers(ms)
     setLoading(false)
+
+    const acceptedIds = decs.filter((d) => d.status === 'accepted').map((d) => d.trial_id)
+    try { setContacts(await adminGetTrialContacts([...new Set(acceptedIds)])) } catch { /* контакты не критичны */ }
   }
   useEffect(() => { loadAll() }, [])
 
@@ -132,6 +151,53 @@ export default function AdminScreen() {
     catch (e) { setGroupMsg(`Ошибка: ${(e as Error).message}`) }
   }
 
+  // Принятые исследования с расшифровкой: кто принял и что именно.
+  // Свежие решения сверху — по ним работа начинается прямо сейчас.
+  const accepted = useMemo(() => decisions
+    .filter((d) => d.status === 'accepted')
+    .map((d) => ({
+      d,
+      doc: doctors.find((x) => x.id === d.user_id),
+      t: trials.find((x) => x.id === d.trial_id),
+    }))
+    .filter((x): x is { d: Decision; doc: Profile; t: Trial } => Boolean(x.doc && x.t))
+    .sort((a, b) => String(b.d.decided_at).localeCompare(String(a.d.decided_at))),
+  [decisions, doctors, trials])
+
+  // Контакты берём из кэша trial_contacts (его наполняет ночной прогон
+  // scripts/fetch_contacts.mjs). Если по исследованию их ещё нет — тянем
+  // напрямую с ClinicalTrials.gov и сохраняем, чтобы не ждать прогона.
+  async function refreshContacts(t: Trial) {
+    setContactBusy((s) => new Set(s).add(t.id))
+    setContactErr((m) => { const n = new Map(m); n.delete(t.id); return n })
+    try {
+      const row = await adminSaveTrialContacts(t.id, await fetchTrialContacts(t.nct_id))
+      setContacts((m) => new Map(m).set(t.id, row))
+    } catch (e) {
+      setContactErr((m) => new Map(m).set(t.id,
+        `Не удалось получить контакты: ${(e as Error).message}. Откройте карточку на ClinicalTrials.gov.`))
+    } finally {
+      setContactBusy((s) => { const n = new Set(s); n.delete(t.id); return n })
+    }
+  }
+
+  useEffect(() => {
+    if (autoRunning.current) return
+    const queue = accepted
+      .filter(({ t }) => !contacts.has(t.id) && !autoTried.current.has(t.id))
+      .slice(0, 12)
+    if (!queue.length) return
+    autoRunning.current = true
+    ;(async () => {
+      for (const { t } of queue) {
+        autoTried.current.add(t.id)
+        await refreshContacts(t)
+        await new Promise((r) => setTimeout(r, 250)) // бережём публичный API
+      }
+      autoRunning.current = false
+    })()
+  }, [accepted, contacts])
+
   async function setStage(d: Decision, stage: WorkStage) {
     setDecisions((prev) => prev.map((x) =>
       x.user_id === d.user_id && x.trial_id === d.trial_id ? { ...x, work_stage: stage } : x))
@@ -199,30 +265,57 @@ export default function AdminScreen() {
         </div>
       </section>
 
-      {/* Работа по принятым: этапы отмечает админ, врач видит трек */}
+      {/* Работа по принятым: полная карточка исследования + контакты спонсора.
+          Этапы отмечает админ — врач видит тот же трек у себя.
+          Контакты видны только здесь: таблица trial_contacts закрыта is_admin(). */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-[14px] font-semibold">Работа по принятым исследованиям</h2>
-        {decisions.filter((d) => d.status === 'accepted').length === 0 && (
+        <div>
+          <h2 className="text-[14px] font-semibold">Работа по принятым исследованиям</h2>
+          <p className="text-[12px] text-[var(--muted)]">
+            Карточка целиком плюс контакты спонсора — кому писать по этому исследованию.
+            Врачам блок контактов не виден.
+          </p>
+        </div>
+        {accepted.length === 0 && (
           <p className="text-[13px] text-[var(--muted)]">Пока никто ничего не принял.</p>
         )}
         <div className="flex flex-col gap-3">
-          {decisions.filter((d) => d.status === 'accepted').map((d) => {
-            const doc = doctors.find((x) => x.id === d.user_id)
-            const t = trials.find((x) => x.id === d.trial_id)
-            if (!doc || !t) return null
-            return (
-              <div key={`${d.user_id}:${d.trial_id}`}
-                className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3 card-hover">
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-[13px] font-semibold">{doc.full_name || doc.email}</span>
-                  <span className="text-[12px] text-[var(--muted)]">·</span>
-                  <span className="mono text-[11px] text-[var(--muted)]">{t.nct_id}</span>
-                  <span className="text-[13px]">{t.title_ru || t.title}</span>
+          {accepted.map(({ d, doc, t }) => (
+            <TrialCard
+              key={`${d.user_id}:${d.trial_id}`}
+              trial={t}
+              mode="readonly"
+              defaultOpen
+              badge={
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}
+                  title={doc.email}>
+                  {doc.full_name || doc.email}
+                </span>
+              }
+              body={
+                <div className="flex flex-col gap-2.5">
+                  <StageTracker stage={d.work_stage} editable onSetStage={(s) => setStage(d, s)} />
+                  {d.note && (
+                    <p className="text-[12px] rounded-lg px-2.5 py-2 leading-relaxed"
+                      style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+                      <span className="text-[var(--muted)]">Заметка врача: </span>
+                      {d.note}
+                    </p>
+                  )}
                 </div>
-                <StageTracker stage={d.work_stage} editable onSetStage={(s) => setStage(d, s)} />
-              </div>
-            )
-          })}
+              }
+              details={
+                <ContactPanel
+                  trial={t}
+                  contacts={contacts.get(t.id)}
+                  refreshing={contactBusy.has(t.id)}
+                  error={contactErr.get(t.id)}
+                  onRefresh={() => refreshContacts(t)}
+                />
+              }
+            />
+          ))}
         </div>
       </section>
 

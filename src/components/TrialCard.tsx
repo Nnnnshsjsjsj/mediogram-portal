@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Decision, Trial } from '../lib/types'
 import { CATEGORIES, scoreColor, scoreLabel, statusColor, statusLabel } from '../lib/types'
 
@@ -16,16 +16,28 @@ interface Props {
   mode: 'triage' | 'upcoming' | 'readonly'
   onDecide?: (status: 'accepted' | 'rejected' | 'deferred') => void
   onToggleWatch?: (on: boolean) => void
+  /** Слот в начале шапки — админ подписывает карточку именем врача. */
+  badge?: ReactNode
+  /** Блок сразу под описанием: трек этапов, заметка врача. */
+  body?: ReactNode
+  /** Блок внутри «Подробнее» — там же, где клинические детали. */
+  details?: ReactNode
+  /** Раскрыть детали сразу при первом рендере. */
+  defaultOpen?: boolean
 }
 
-export default function TrialCard({ trial, decision, watched, mode, onDecide, onToggleWatch }: Props) {
-  const [open, setOpen] = useState(false)
+export default function TrialCard({
+  trial, decision, watched, mode, onDecide, onToggleWatch,
+  badge, body, details, defaultOpen,
+}: Props) {
+  const [open, setOpen] = useState(Boolean(defaultOpen))
   const title = trial.title_ru || trial.title
   const sc = trial.score
 
   return (
     <article className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 flex flex-col gap-3 card-hover">
       <header className="flex flex-wrap items-center gap-2">
+        {badge}
         {sc != null && (
           <span className="mono text-[12px] font-semibold px-2 py-0.5 rounded-lg"
             title={scoreLabel(sc)}
@@ -57,8 +69,11 @@ export default function TrialCard({ trial, decision, watched, mode, onDecide, on
         {trial.summary_ru || 'Русское описание пока не готово — нажмите «Подробнее» и откройте первоисточник на ClinicalTrials.gov.'}
       </p>
 
+      {body}
+
       {open && (
         <div className="text-[13px] text-[var(--muted)] flex flex-col gap-2.5 border-t border-[var(--line)] pt-3">
+          {details}
           {sc != null && trial.score_reasons?.length > 0 && (
             <div className="rounded-xl border border-[var(--line)] p-3 flex flex-col gap-1.5" style={{ background: "var(--teal-soft)" }}>
               <span className="text-[11px] uppercase tracking-wide font-semibold"

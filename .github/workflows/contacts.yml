@@ -1,0 +1,42 @@
+name: Sponsor contacts
+# Контакты спонсора/CRO по исследованиям — в таблицу trial_contacts.
+# Админ-панель показывает их в карточках принятых исследований.
+#
+# Раз в сутки, потому что врач может принять исследование в любой день, а
+# админу контакты нужны сразу. Панель умеет добирать их и на лету, но тогда
+# ждать приходится живому человеку.
+on:
+  schedule:
+    - cron: "40 4 * * *"   # 04:40 UTC = 06:40 CET, до утренней проверки портала
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "accepted — только принятые; digest — принятые + текущий выпуск; all — вообще все"
+        required: false
+        default: "digest"
+        type: choice
+        options: [digest, accepted, all]
+      max_age:
+        description: "Обновлять записи старше стольких дней"
+        required: false
+        default: "14"
+      limit:
+        description: "Максимум исследований за прогон"
+        required: false
+        default: "60"
+jobs:
+  contacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Fetch sponsor contacts
+        run: node scripts/fetch_contacts.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CONTACTS_SCOPE: ${{ inputs.scope || 'digest' }}
+          CONTACTS_MAX_AGE: ${{ inputs.max_age || '14' }}
+          CONTACTS_LIMIT: ${{ inputs.limit || '60' }}
