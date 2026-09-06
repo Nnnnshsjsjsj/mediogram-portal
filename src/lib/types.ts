@@ -145,3 +145,80 @@ export function statusColor(s: string): string {
   const key = s.toUpperCase().replace(/[ ,]+/g, '_')
   return STATUS_COLORS[key] ?? 'var(--muted)'
 }
+
+// ---------------------------------------------------------------- контакты
+// Кому писать по исследованию. Лежит в trial_contacts, видит только админ:
+// врачам outreach-данные не показываем (см. 003_trial_contacts.sql).
+
+export interface ContactPerson {
+  name: string
+  role: string
+  email: string
+  phone: string
+  ext: string
+}
+
+export interface Official {
+  name: string
+  affiliation: string
+  role: string
+}
+
+export interface ContactSite {
+  facility: string
+  city: string
+  country: string
+  status: string
+  contacts: ContactPerson[]
+}
+
+// Тело записи — то, что отдаёт ClinicalTrials.gov после маппинга.
+export interface TrialContactsData {
+  lead_sponsor: string | null
+  sponsor_class: string | null
+  collaborators: string[]
+  responsible_party: string | null
+  central_contacts: ContactPerson[]
+  officials: Official[]
+  sites: ContactSite[]
+  sites_total: number
+  enrollment: number | null
+  start_date: string | null
+  completion_date: string | null
+  last_update_posted: string | null
+}
+
+export interface TrialContacts extends TrialContactsData {
+  trial_id: string
+  fetched_at: string
+}
+
+// Сколько живых способов связаться есть в карточке.
+export function contactWays(c: TrialContacts | TrialContactsData | undefined): number {
+  if (!c) return 0
+  return c.central_contacts.length + c.sites.reduce((n, s) => n + s.contacts.length, 0)
+}
+
+export const SPONSOR_CLASS: Record<string, string> = {
+  INDUSTRY: 'Индустрия',
+  NIH: 'NIH',
+  FED: 'Госструктура',
+  OTHER_GOV: 'Госструктура',
+  NETWORK: 'Исследовательская сеть',
+  INDIV: 'Частный исследователь',
+  OTHER: 'Прочее',
+  UNKNOWN: '',
+}
+
+export const CONTACT_ROLE: Record<string, string> = {
+  CONTACT: 'контактное лицо',
+  STUDY_CHAIR: 'председатель исследования',
+  STUDY_DIRECTOR: 'директор исследования',
+  PRINCIPAL_INVESTIGATOR: 'главный исследователь',
+  SUB_INVESTIGATOR: 'соисследователь',
+}
+
+export function roleLabel(role: string): string {
+  if (!role) return ''
+  return CONTACT_ROLE[role.toUpperCase()] ?? role.split('_').join(' ').toLowerCase()
+}
