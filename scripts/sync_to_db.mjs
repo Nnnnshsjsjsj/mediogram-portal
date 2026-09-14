@@ -6,10 +6,22 @@
 // Аргумент: путь к latest.json (по умолчанию out/latest.json)
 //
 // Контракт полей от бота (все опциональны, кроме nct/title):
-//   nct, title, title_ru, summary, summary_ru, status, phase, sponsor,
+//   nct, source, title, title_ru, summary, summary_ru, status, phase, sponsor,
 //   countries[], conditions[], url, posted, category
 // Если бот не проставил category — деривация ниже (та же логика, что в радаре,
 // плюс фарм-категории для арритмологии).
+//
+// ВАЖНО (радар v7): у бота теперь три источника, и поле `nct` больше не всегда
+// номер NCT — у ctis это номер EU CT (2024-518950-17-00), у fda номер решения
+// (FDA-K261549). Портал — инструмент триажа ИССЛЕДОВАНИЙ для врача, поэтому
+// сюда попадает только ctgov:
+//   • fda — это вообще не исследование, а разрешение на устройство в США;
+//     врачу нечего принимать или отклонять, это лид для BD, место ему в Радаре.
+//   • ctis — настоящие исследования, но enrich_ru.mjs и fetch_contacts.mjs
+//     ходят в ClinicalTrials.gov по nct_id, а поле status приходит как
+//     "CTIS status 4" (EMA не публикует расшифровку кодов), из-за чего
+//     isUpcoming() не работает. Включать их можно только вместе с отдельным
+//     обогащением из реестра CTIS.
 
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -46,6 +58,18 @@ function deriveCategory(lead) {
   return 'devices'
 }
 
+// Источники бота, которые попадают в портал. Переопределяется переменной
+// окружения PORTAL_SOURCES (через запятую), если понадобится временно впустить
+// ctis для проверки.
+const ALLOWED_SOURCES = new Set(
+  (process.env.PORTAL_SOURCES ?? 'ctgov').split(',').map((x) => x.trim()).filter(Boolean)
+)
+
+// Фиды до радара v7 поля `source` не имеют — считаем их ctgov, как и было.
+function leadSource(l) {
+  return String(l.source ?? 'ctgov').toLowerCase()
+}
+
 function normStatus(s) {
   return String(s ?? '').trim()
 }
@@ -65,8 +89,24 @@ function mondayOfThisWeek() {
 async function main() {
   const path = process.argv[2] ?? 'out/latest.json'
   const latest = JSON.parse(readFileSync(path, 'utf-8'))
-  const leads = Array.isArray(latest.leads) ? latest.leads : []
-  console.log(`Прочитано лидов: ${leads.length}`)
+  const allLeads = Array.isArray(latest.leads) ? latest.leads : []
+  const leads = allLeads.filter((l) => ALLOWED_SOURCES.has(leadSource(l)))
+  const skipped = allLeads.length - leads.length
+  console.log(`Прочитано лидов: ${allLeads.length}`)
+  if (skipped) {
+    const bySource = {}
+    for (const l of allLeads) {
+      const s = leadSource(l)
+      if (!ALLOWED_SOURCES.has(s)) bySource[s] = (bySource[s] ?? 0) + 1
+    }
+    const detail = Object.entries(bySource).map(([k, v]) => `${k} ${v}`).join(', ')
+    console.log(`Пропущено не-ctgov лидов: ${skipped} (${detail}) — они остаются только в Радаре`)
+  }
+  if (leads.length === 0 && allLeads.length > 0) {
+    // Иначе апсерт пустого массива тихо обнулил бы выпуск недели.
+    console.error('::error::После фильтра по источнику не осталось ни одного лида — проверь поле source в latest.json')
+    process.exit(1)
+  }
 
   const rows = leads
     .filter((l) => l.nct && l.title)
@@ -93,6 +133,7 @@ async function main() {
         raw: {
           tier: l.tier ?? null,
           modality: l.modality ?? null,
+          source: leadSource(l),
           region_sites: Array.isArray(l.region_sites) ? l.region_sites : [],
         },
       }
