@@ -145,16 +145,16 @@ export function normalizeExpansionData(raw: unknown): ExpansionData {
 export interface CompletenessItem { key: string; label: string; done: boolean; required: boolean }
 
 export function completeness(fieldRu: string, fieldEn: string, d: ExpansionData): { pct: number; items: CompletenessItem[]; canSubmit: boolean } {
-  const subOk = d.subareas.filter((s) => s.name_ru.trim() && s.name_en.trim())
+  const subOk = d.subareas.filter((s) => s.name_ru.trim())
   const subTermsOk = subOk.filter((s) => s.terms.length > 0)
   const items: CompletenessItem[] = [
-    { key: 'field',       label: 'Название направления (рус. и англ.)',          done: !!fieldRu.trim() && !!fieldEn.trim(), required: true },
+    { key: 'field',       label: 'Название направления',                        done: !!fieldRu.trim(), required: true },
     { key: 'lead',        label: 'Ответственный врач и контакт',                 done: !!d.lead_name.trim() && !!d.contact.trim(), required: true },
     { key: 'institution', label: 'Учреждение и отделение',                       done: !!d.institution.trim(), required: true },
     { key: 'subareas',    label: 'Хотя бы одна подобласть с названием',          done: subOk.length > 0, required: true },
-    { key: 'subterms',    label: 'У каждой подобласти есть англ. термины поиска', done: subOk.length > 0 && subTermsOk.length === subOk.length, required: true },
-    { key: 'conditions',  label: 'Не меньше трёх заболеваний (англ.)',           done: d.conditions.length >= 3, required: true },
-    { key: 'keywords',    label: 'Не меньше пяти ключевых слов (англ.)',          done: d.keywords_en.length >= 5, required: true },
+    { key: 'subterms',    label: 'У каждой подобласти указано, что к ней относится', done: subOk.length > 0 && subTermsOk.length === subOk.length, required: true },
+    { key: 'conditions',  label: 'Не меньше трёх заболеваний',                   done: d.conditions.length >= 3, required: true },
+    { key: 'keywords',    label: 'Не меньше пяти ключевых слов',                  done: d.keywords_ru.length >= 5, required: true },
     { key: 'study_types', label: 'Типы исследований',                            done: d.study_types.length > 0, required: true },
     { key: 'patients',    label: 'Поток пациентов',                              done: !!d.patients_per_month.trim(), required: true },
     { key: 'experience',  label: 'Опыт клинических исследований',                done: !!d.trial_experience, required: true },
@@ -165,6 +165,7 @@ export function completeness(fieldRu: string, fieldEn: string, d: ExpansionData)
     { key: 'ncts',        label: 'Примеры подходящих исследований (NCT)',        done: d.example_ncts.length > 0, required: false },
     { key: 'infra',       label: 'Инфраструктура центра',                        done: d.infrastructure.length > 0, required: false },
     { key: 'colleagues',  label: 'Коллеги для подключения',                      done: d.colleagues.length > 0, required: false },
+    { key: 'english',     label: 'Английские термины',                           done: !!fieldEn.trim() || d.keywords_en.length > 0, required: false },
   ]
   const done = items.filter((i) => i.done).length
   return {
@@ -176,8 +177,20 @@ export function completeness(fieldRu: string, fieldEn: string, d: ExpansionData)
 
 // ---------- спецификация для радара ----------
 
+const TRANSLIT: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
+  н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch',
+  ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+}
+
+export function hasCyrillic(s: string): boolean {
+  return /[а-яё]/i.test(s)
+}
+
+// Ключ категории: из английского названия, а если его нет — транслит русского.
 export function slugify(s: string): string {
-  return s.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '_').slice(0, 32) || 'field'
+  const t = s.toLowerCase().replace(/[а-яё]/g, (c) => TRANSLIT[c] ?? '')
+  return t.normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '_').slice(0, 32) || 'field'
 }
 
 function uniqLower(arr: string[]): string[] {
@@ -188,18 +201,25 @@ export function buildBotSpec(r: ExpansionRequest) {
   const d = r.data
   return {
     field: { slug: slugify(r.field_en), ru: r.field_ru, en: r.field_en },
+    // Врачи заполняют по-русски; всё, где есть кириллица, перед вставкой в радар нужно перевести.
+    needs_translation: [
+      r.field_en ? '' : r.field_ru, ...d.subareas.flatMap((s) => [s.name_en ? '' : s.name_ru, ...s.terms]),
+      ...d.conditions, ...d.interventions, ...d.exclude, ...d.keywords_ru,
+    ].some(hasCyrillic),
     categories: d.subareas
       .filter((s) => s.name_ru.trim())
       .map((s) => ({
         key: slugify(s.name_en || s.name_ru),
         label_ru: s.name_ru.trim(),
-        label_en: s.name_en.trim(),
+        label_en: s.name_en.trim() || null,
         priority: s.priority,
-        terms: uniqLower(s.terms),
+        terms_ru: uniqLower(s.terms.filter(hasCyrillic)),
+        terms_en: uniqLower(s.terms.filter((t) => !hasCyrillic(t))),
       })),
     conditions: uniqLower(d.conditions),
     interventions: uniqLower(d.interventions),
-    include: uniqLower([...d.keywords_en, ...d.conditions, ...d.subareas.flatMap((s) => s.terms)]),
+    keywords_ru: uniqLower(d.keywords_ru),
+    keywords_en: uniqLower(d.keywords_en),
     exclude: uniqLower(d.exclude),
     study_types: d.study_types,
     phases: d.phases,
@@ -220,22 +240,29 @@ export function buildBotSpec(r: ExpansionRequest) {
 export function buildCategoryRulesSnippet(r: ExpansionRequest): string {
   const spec = buildBotSpec(r)
   const rules = spec.categories
-    .map((c) => `  ['${c.key}', ${JSON.stringify(c.terms)}],`)
+    .map((c) => {
+      const en = c.terms_en.length ? JSON.stringify(c.terms_en) : '[]'
+      const todo = c.terms_ru.length ? `  // TODO перевести: ${c.terms_ru.join(', ')}` : ''
+      return `  ['${c.key}', ${en}],${todo}`
+    })
     .join('\n')
   const labels = spec.categories
     .map((c) => `  ${c.key}: '${c.label_ru.replace(/'/g, "\\'")}',`)
     .join('\n')
   return [
-    `// ${spec.field.ru} (${spec.field.en}) — из заявки ${r.id}`,
+    `// ${spec.field.ru}${spec.field.en ? ` (${spec.field.en})` : ' (англ. название — перевести)'} — из заявки ${r.id}`,
+    spec.needs_translation ? `// Термины врачи писали по-русски: строки с TODO перевести на английский перед вставкой.` : '',
     `// scripts/sync_to_db.mjs → CATEGORY_RULES`,
     rules,
     ``,
     `// src/lib/types.ts → CATEGORIES`,
     labels,
     ``,
-    `// exclude: ${JSON.stringify(spec.exclude)}`,
+    `// заболевания: ${spec.conditions.join(', ') || '—'}`,
+    `// ключевые слова: ${[...spec.keywords_ru, ...spec.keywords_en].join(', ') || '—'}`,
+    `// исключить: ${spec.exclude.join(', ') || '—'}`,
     `// example NCTs для калибровки: ${spec.example_ncts.join(', ') || '—'}`,
-  ].join('\n')
+  ].filter((l) => l !== '').join('\n')
 }
 
 export function fmtDate(s: string | null | undefined): string {

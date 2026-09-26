@@ -225,20 +225,15 @@ function ExpansionForm({ profile, initial, onDone }: { profile: Profile; initial
       {initial?.admin_note && initial.status === 'needs_info' && <AdminNote note={initial.admin_note} />}
 
       <p className="text-[12px] text-[var(--muted)]">
-        Поля со звёздочкой обязательны. Англоязычные термины важнее русских: радар ищет по ClinicalTrials.gov
-        и европейскому реестру, где всё на английском.
+        Поля со звёздочкой обязательны. Заполняйте по-русски, как удобно — так, как вы говорите о пациентах
+        у себя в отделении. Перевод для поисковой системы сделает Mediogram.
       </p>
 
       {/* 1 */}
       <Section n={1} title="Направление и центр" hint="Кто вы и о какой области речь">
-        <div className="grid md:grid-cols-2 gap-3">
-          <Field label="Направление (рус.)" required>
-            <Input value={fieldRu} onChange={setFieldRu} placeholder="Урология" />
-          </Field>
-          <Field label="Направление (англ.)" required hint="Как называется специальность в англоязычной литературе">
-            <Input value={fieldEn} onChange={setFieldEn} placeholder="Urology" />
-          </Field>
-        </div>
+        <Field label="Направление" required hint="Медицинская специальность, которую хотите подключить к порталу">
+          <Input value={fieldRu} onChange={setFieldRu} placeholder="Урология" />
+        </Field>
         <Field label="Чем занимается ваш центр в этом направлении" hint="2–4 предложения: профиль пациентов, ключевые методики, что делаете чаще всего">
           <Textarea value={data.description} onChange={(v) => set('description', v)} rows={3}
             placeholder="Например: отделение урологии на 40 коек, ежегодно ~600 операций по поводу МКБ и ДГПЖ, есть кабинет уродинамики…" />
@@ -260,19 +255,18 @@ function ExpansionForm({ profile, initial, onDone }: { profile: Profile; initial
         <div className="flex flex-col gap-3">
           {data.subareas.map((s, i) => (
             <div key={i} className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3.5 flex flex-col gap-3">
-              <div className="grid md:grid-cols-[1fr_1fr_150px_auto] gap-2 items-end">
-                <Field label="Название (рус.)" required compact><Input value={s.name_ru} onChange={(v) => setSub(i, { name_ru: v })} placeholder="Андрология" /></Field>
-                <Field label="Название (англ.)" required compact><Input value={s.name_en} onChange={(v) => setSub(i, { name_en: v })} placeholder="Andrology" /></Field>
+              <div className="grid md:grid-cols-[1fr_150px_auto] gap-2 items-end">
+                <Field label="Название" required compact><Input value={s.name_ru} onChange={(v) => setSub(i, { name_ru: v })} placeholder="Андрология" /></Field>
                 <Field label="Приоритет" compact>
                   <Select value={s.priority} onChange={(v) => setSub(i, { priority: v as SubArea['priority'] })} options={PRIORITY} />
                 </Field>
                 <button onClick={() => set('subareas', data.subareas.length > 1 ? data.subareas.filter((_, idx) => idx !== i) : [emptySubArea()])}
                   className="text-[12px] hover:underline pb-2.5" style={{ color: 'var(--red)' }}>Убрать</button>
               </div>
-              <Field label="Термины поиска (англ.)" required compact
-                hint="По ним радар отнесёт исследование именно к этой подобласти. Диагнозы, процедуры, названия устройств и препаратов — как в названиях исследований.">
-                <TagInput value={s.terms} onChange={(v) => setSub(i, { terms: v })} mono transform={(t) => t.toLowerCase()}
-                  placeholder="erectile dysfunction, hypogonadism, male infertility, testosterone…" />
+              <Field label="Что сюда относится" required compact
+                hint="Диагнозы, процедуры, устройства, препараты — всё, по чему вы узнаёте «это моё». Через запятую или Enter.">
+                <TagInput value={s.terms} onChange={(v) => setSub(i, { terms: v })} transform={(t) => t.toLowerCase()}
+                  placeholder="эректильная дисфункция, гипогонадизм, мужское бесплодие, тестостерон…" />
               </Field>
               <Field label="Примечание" compact>
                 <Input value={s.note} onChange={(v) => setSub(i, { note: v })} placeholder="Что важно именно для вас в этой подобласти" />
@@ -286,11 +280,11 @@ function ExpansionForm({ profile, initial, onDone }: { profile: Profile; initial
 
       {/* 3 */}
       <Section n={3} title="Что искать" hint="Клинические границы поиска: какие пациенты, какие вмешательства, чего не надо">
-        <Field label="Заболевания и состояния (англ.)" required hint="Минимум три. Пишите так, как их называют в ClinicalTrials.gov: «prostate cancer», «benign prostatic hyperplasia», «overactive bladder»">
-          <TagInput value={data.conditions} onChange={(v) => set('conditions', v)} mono transform={(t) => t.toLowerCase()} placeholder="prostate cancer, kidney stones, …" />
+        <Field label="Заболевания и состояния" required hint="Минимум три. Основные диагнозы ваших пациентов — как вы их называете. Можно с аббревиатурами: ДГПЖ, МКБ, ГАМП">
+          <TagInput value={data.conditions} onChange={(v) => set('conditions', v)} transform={(t) => t.toLowerCase()} placeholder="рак простаты, мочекаменная болезнь, ДГПЖ…" />
         </Field>
-        <Field label="Интересующие вмешательства (англ.)" hint="Классы препаратов, типы устройств, процедуры: «PSMA-targeted therapy», «laser lithotripsy», «sacral neuromodulation»">
-          <TagInput value={data.interventions} onChange={(v) => set('interventions', v)} mono transform={(t) => t.toLowerCase()} placeholder="…" />
+        <Field label="Интересующие вмешательства" hint="Классы препаратов, типы устройств, операции и процедуры, по которым хотели бы участвовать">
+          <TagInput value={data.interventions} onChange={(v) => set('interventions', v)} transform={(t) => t.toLowerCase()} placeholder="лазерная литотрипсия, сакральная нейромодуляция, гормональная терапия…" />
         </Field>
         <div className="grid md:grid-cols-3 gap-4">
           <Field label="Типы исследований" required>
@@ -303,27 +297,35 @@ function ExpansionForm({ profile, initial, onDone }: { profile: Profile; initial
             <CheckGroup value={data.age_groups} onToggle={(k) => set('age_groups', toggle(data.age_groups, k))} options={AGE_GROUPS} />
           </Field>
         </div>
-        <Field label="Что исключить из поиска (англ.)" hint="Термины, при которых исследование вам точно не подходит — сильно снижает шум">
-          <TagInput value={data.exclude} onChange={(v) => set('exclude', v)} mono transform={(t) => t.toLowerCase()}
-            placeholder="pediatric, veterinary, healthy volunteers…"
-            suggestions={['pediatric', 'healthy volunteers', 'animal', 'in vitro', 'survey', 'nursing']} />
+        <Field label="Что вам точно не подходит" hint="Темы и типы исследований, которые не надо присылать — сильно снижает мусор в подборках">
+          <TagInput value={data.exclude} onChange={(v) => set('exclude', v)} transform={(t) => t.toLowerCase()}
+            placeholder="детские, здоровые добровольцы…"
+            suggestions={['детские', 'здоровые добровольцы', 'опросы и анкеты', 'лабораторные (in vitro)', 'сестринские']} />
         </Field>
       </Section>
 
       {/* 4 */}
-      <Section n={4} title="Ключевые слова для радара" hint="Самая полезная часть для бота. Чем точнее слова — тем меньше мусора в дайджесте">
-        <Field label="Ключевые слова (англ.)" required hint="Минимум пять. Всё, по чему вы сами искали бы исследования: синонимы, аббревиатуры (BPH, OAB, RCC), названия методик">
-          <TagInput value={data.keywords_en} onChange={(v) => set('keywords_en', v)} mono transform={(t) => t.toLowerCase()} placeholder="BPH, nephrolithiasis, urinary incontinence, …" />
-        </Field>
-        <Field label="Ключевые слова (рус.)" hint="Необязательно. Помогают правильно подписывать карточки и категории по-русски">
-          <TagInput value={data.keywords_ru} onChange={(v) => set('keywords_ru', v)} placeholder="ДГПЖ, мочекаменная болезнь, недержание…" />
+      <Section n={4} title="Ключевые слова" hint="По ним поисковая система будет отбирать исследования. Чем точнее слова — тем меньше мусора в подборках">
+        <Field label="Ключевые слова" required hint="Минимум пять. Всё, по чему вы сами искали бы исследования: синонимы, аббревиатуры, названия методик, устройств, препаратов">
+          <TagInput value={data.keywords_ru} onChange={(v) => set('keywords_ru', v)} transform={(t) => t.toLowerCase()} placeholder="ДГПЖ, недержание мочи, простатэктомия, уродинамика…" />
         </Field>
         <Field label="Известные спонсоры и компании" hint="Кто в этой области ведёт исследования: фарма, производители устройств, CRO, с кем уже работали">
           <TagInput value={data.sponsors} onChange={(v) => set('sponsors', v)} placeholder="Astellas, Boston Scientific, Bayer…" />
         </Field>
-        <Field label="Примеры подходящих исследований" hint="Номера NCT с ClinicalTrials.gov, которые вы бы приняли. По ним мы калибруем поиск — это точнее любых ключевых слов">
+        <Field label="Примеры подходящих исследований" hint="Необязательно. Если знаете номера исследований (NCT…), в которых хотели бы участвовать — по ним мы точнее настроим поиск">
           <TagInput value={data.example_ncts} onChange={(v) => set('example_ncts', v)} mono transform={(t) => t.toUpperCase().replace(/\s/g, '')} placeholder="NCT01234567" />
         </Field>
+        <details className="rounded-xl border border-dashed border-[var(--line)] px-3.5 py-2.5">
+          <summary className="text-[12px] text-[var(--muted)] cursor-pointer select-none">
+            Если знаете английские термины — можно добавить здесь (необязательно)
+          </summary>
+          <div className="flex flex-col gap-3 pt-3">
+            <Field label="Направление по-английски" compact><Input value={fieldEn} onChange={setFieldEn} placeholder="Urology" /></Field>
+            <Field label="Ключевые слова по-английски" compact hint="Как в англоязычных статьях: BPH, nephrolithiasis, urinary incontinence">
+              <TagInput value={data.keywords_en} onChange={(v) => set('keywords_en', v)} mono transform={(t) => t.toLowerCase()} placeholder="BPH, nephrolithiasis, …" />
+            </Field>
+          </div>
+        </details>
       </Section>
 
       {/* 5 */}
