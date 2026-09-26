@@ -130,7 +130,7 @@ export default function ExpansionAdmin({ doctors, onGroupsChanged }: { doctors: 
                   <span>·</span>
                   <span>{subs.length ? subs.map((s) => s.name_ru).join(', ') : 'подобласти не указаны'}</span>
                   <span>·</span>
-                  <span>{r.data.keywords_en.length} ключевых слов, {r.data.conditions.length} заболеваний</span>
+                  <span>{r.data.keywords_ru.length + r.data.keywords_en.length} ключевых слов, {r.data.conditions.length} заболеваний</span>
                   {r.status === 'draft' && <span>· заполнено {c.pct}%</span>}
                 </div>
               </button>

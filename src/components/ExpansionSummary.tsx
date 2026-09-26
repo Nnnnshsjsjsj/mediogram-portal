@@ -28,7 +28,7 @@ export default function ExpansionSummary({ r }: { r: ExpansionRequest }) {
                 {PRIORITY[s.priority]} приоритет
               </span>
             </div>
-            <Chips items={s.terms} mono />
+            <Chips items={s.terms} />
             {s.note && <p className="text-[12px] text-[var(--muted)]">{s.note}</p>}
           </div>
         ))}
@@ -36,17 +36,17 @@ export default function ExpansionSummary({ r }: { r: ExpansionRequest }) {
       </Block>
 
       <Block title="3 · Что искать">
-        <Row k="Заболевания" v={<Chips items={d.conditions} mono />} />
-        <Row k="Вмешательства" v={<Chips items={d.interventions} mono />} />
+        <Row k="Заболевания" v={<Chips items={d.conditions} />} />
+        <Row k="Вмешательства" v={<Chips items={d.interventions} />} />
         <Row k="Типы исследований" v={labels(d.study_types, STUDY_TYPES).join(', ')} />
         <Row k="Фазы" v={labels(d.phases, PHASES).join(', ')} />
         <Row k="Возраст" v={labels(d.age_groups, AGE_GROUPS).join(', ')} />
-        <Row k="Исключить" v={<Chips items={d.exclude} mono tone="red" />} />
+        <Row k="Исключить" v={<Chips items={d.exclude} tone="red" />} />
       </Block>
 
-      <Block title="4 · Ключевые слова для радара">
-        <Row k="Англ." v={<Chips items={d.keywords_en} mono />} />
-        <Row k="Рус." v={<Chips items={d.keywords_ru} />} />
+      <Block title="4 · Ключевые слова">
+        <Row k="Ключевые слова" v={<Chips items={d.keywords_ru} />} />
+        {(d.keywords_en.length > 0 || r.field_en) && <Row k="По-английски" v={<Chips items={[...(r.field_en ? [r.field_en] : []), ...d.keywords_en]} mono />} />}
         <Row k="Спонсоры" v={<Chips items={d.sponsors} />} />
         <Row k="Примеры NCT" v={<Chips items={d.example_ncts} mono link />} />
       </Block>
