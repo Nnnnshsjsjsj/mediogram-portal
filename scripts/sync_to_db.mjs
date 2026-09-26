@@ -54,6 +54,25 @@ function isUpcoming(status) {
   return /not[_ ]?yet[_ ]?recruiting/i.test(status)
 }
 
+// Источники, которые портал принимает. Радар v7 собирает ещё EU CTIS и openFDA,
+// но портал к ним не готов: у CTIS статус приходит числовым кодом («CTIS status 8»),
+// балл у этих записей не откалиброван (почти все 95 и вытесняют CT.gov из выпуска),
+// а enrich_ru.mjs и fetch_contacts.mjs ходят в ClinicalTrials.gov по nct_id.
+// FDA 510(k)/PMA — это вообще не исследования, а разрешения на изделия.
+// Переопределяется через env: PORTAL_SOURCES=ctgov,ctis
+const ALLOWED_SOURCES = new Set(
+  String(process.env.PORTAL_SOURCES ?? 'ctgov').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+)
+
+// Бот может не проставить source — тогда определяем по формату идентификатора.
+function sourceOf(lead) {
+  if (lead.source) return String(lead.source).toLowerCase()
+  const id = String(lead.nct ?? '')
+  if (/^NCT\d{8}$/i.test(id)) return 'ctgov'
+  if (/^\d{4}-\d{6}-\d{2}-\d{2}$/.test(id)) return 'ctis'
+  return 'fda'
+}
+
 // Понедельник текущей недели (UTC) — ключ выпуска.
 function mondayOfThisWeek() {
   const d = new Date()
@@ -68,8 +87,13 @@ async function main() {
   const leads = Array.isArray(latest.leads) ? latest.leads : []
   console.log(`Прочитано лидов: ${leads.length}`)
 
+  const bySource = {}
+  for (const l of leads) { const src = sourceOf(l); bySource[src] = (bySource[src] ?? 0) + 1 }
+  console.log(`По источникам: ${JSON.stringify(bySource)}; принимаем: ${[...ALLOWED_SOURCES].join(', ')}`)
+
   const rows = leads
     .filter((l) => l.nct && l.title)
+    .filter((l) => ALLOWED_SOURCES.has(sourceOf(l)))
     .map((l) => {
       const status = normStatus(l.status)
       return {

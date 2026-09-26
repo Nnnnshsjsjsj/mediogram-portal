@@ -92,7 +92,7 @@ export default function TrialCard({
           {trial.conditions.length > 0 && <div><span className="text-[var(--text)]">Состояния:</span> {trial.conditions.join(', ')}</div>}
           {trial.countries.length > 0 && <div><span className="text-[var(--text)]">Страны:</span> {trial.countries.slice(0, 10).join(', ')}{trial.countries.length > 10 ? '…' : ''}</div>}
           <a href={trial.source_url} target="_blank" rel="noreferrer" className="text-[var(--teal)] hover:underline">
-            Открыть на ClinicalTrials.gov ↗
+            {sourceLabel(trial.source_url)} ↗
           </a>
         </div>
       )}
@@ -135,4 +135,11 @@ function TriageBtn({ label, color, active, onClick }: { label: string; color: st
       {label}
     </button>
   )
+}
+
+// Подпись ссылки по фактическому адресу: не каждое исследование живёт на CT.gov.
+function sourceLabel(url: string): string {
+  if (url.includes('euclinicaltrials.eu')) return 'Открыть в реестре ЕС (CTIS)'
+  if (url.includes('accessdata.fda.gov') || url.includes('fda.gov')) return 'Открыть на сайте FDA'
+  return 'Открыть на ClinicalTrials.gov'
 }
