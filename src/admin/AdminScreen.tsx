@@ -9,6 +9,7 @@ import { fetchTrialContacts } from '../lib/ctg'
 import StageTracker from '../components/StageTracker'
 import TrialCard from '../components/TrialCard'
 import ContactPanel from '../components/ContactPanel'
+import ExpansionAdmin from './ExpansionAdmin'
 import type { Decision, Group, GroupMember, Profile, Trial, TrialContacts, WorkStage } from '../lib/types'
 import { STAGES, peerName } from '../lib/types'
 
@@ -219,6 +220,9 @@ export default function AdminScreen() {
         <Metric label="Принято / в работе" value={`${stats.accepted} / ${stats.inWork}`} />
         <Metric label="Отклонено · Отложено" value={`${stats.rejected} · ${stats.deferred}`} />
       </div>
+
+      {/* Заявки на новые направления */}
+      <ExpansionAdmin doctors={doctors} onGroupsChanged={loadAll} />
 
       {/* Матрица решений */}
       <section className="flex flex-col gap-2">
