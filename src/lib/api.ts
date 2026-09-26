@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import type { Decision, DecisionStatus, Group, GroupMember, Peer, Profile, Trial, TrialContacts, TrialContactsData, WorkStage } from './types'
 import { peerName } from './types'
+import type { ExpansionData, ExpansionRequest, ExpansionStatus } from './expansion'
+import { normalizeExpansionData } from './expansion'
 
 export async function getMyProfile(): Promise<Profile | null> {
   const { data: { user } } = await supabase.auth.getUser()
@@ -268,4 +270,66 @@ export async function adminSaveTrialContacts(trialId: string, data: TrialContact
   const { error } = await supabase.from('trial_contacts').upsert(row, { onConflict: 'trial_id' })
   if (error) throw error
   return row as TrialContacts
+}
+
+// -------- заявки на новые направления --------
+const EXPANSION_COLS = 'id, created_by, status, field_ru, field_en, data, admin_note, submitted_at, reviewed_at, created_at, updated_at'
+
+function hydrateExpansion(row: Record<string, unknown>): ExpansionRequest {
+  return { ...(row as unknown as ExpansionRequest), data: normalizeExpansionData(row.data) }
+}
+
+export async function getMyExpansionRequests(): Promise<ExpansionRequest[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('expansion_requests').select(EXPANSION_COLS)
+    .eq('created_by', user.id).order('updated_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map(hydrateExpansion)
+}
+
+export async function createExpansionRequest(fieldRu: string, fieldEn: string, payload: ExpansionData): Promise<ExpansionRequest> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('no session')
+  const { data, error } = await supabase
+    .from('expansion_requests')
+    .insert({ created_by: user.id, field_ru: fieldRu.trim(), field_en: fieldEn.trim(), data: payload, status: 'draft' })
+    .select(EXPANSION_COLS).single()
+  if (error) throw error
+  return hydrateExpansion(data)
+}
+
+export async function updateExpansionRequest(
+  id: string,
+  patch: { field_ru?: string; field_en?: string; data?: ExpansionData; status?: ExpansionStatus },
+): Promise<ExpansionRequest> {
+  const { data, error } = await supabase
+    .from('expansion_requests').update(patch).eq('id', id)
+    .select(EXPANSION_COLS).single()
+  if (error) throw error
+  return hydrateExpansion(data)
+}
+
+export async function deleteExpansionRequest(id: string) {
+  const { error } = await supabase.from('expansion_requests').delete().eq('id', id)
+  if (error) throw error
+}
+
+// -------- админ: заявки --------
+export async function adminGetExpansionRequests(): Promise<ExpansionRequest[]> {
+  const { data, error } = await supabase
+    .from('expansion_requests')
+    .select(`${EXPANSION_COLS}, admin_data, author:profiles!expansion_requests_created_by_fkey(id, full_name, email, specialty)`)
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => hydrateExpansion(row as unknown as Record<string, unknown>))
+}
+
+export async function adminUpdateExpansionRequest(
+  id: string,
+  patch: { status?: ExpansionStatus; admin_note?: string | null; admin_data?: Record<string, unknown>; reviewed_at?: string },
+) {
+  const { error } = await supabase.from('expansion_requests').update(patch).eq('id', id)
+  if (error) throw error
 }

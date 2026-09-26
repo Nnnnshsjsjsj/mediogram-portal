@@ -6,10 +6,11 @@ import type { Profile } from './lib/types'
 import TriageScreen from './screens/TriageScreen'
 import DecisionsScreen from './screens/DecisionsScreen'
 import GroupScreen from './screens/GroupScreen'
+import ExpansionScreen from './screens/ExpansionScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import AdminScreen from './admin/AdminScreen'
 
-type Tab = 'triage' | 'decisions' | 'group' | 'settings' | 'admin'
+type Tab = 'triage' | 'decisions' | 'group' | 'expansion' | 'settings' | 'admin'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -47,6 +48,7 @@ export default function App() {
     { id: 'triage', label: 'Триаж' },
     { id: 'decisions', label: 'Мои решения' },
     ...(inGroup ? [{ id: 'group' as Tab, label: 'Группа' }] : []),
+    { id: 'expansion', label: 'Новое направление' },
     { id: 'settings', label: 'Настройки' },
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Админ' }] : []),
   ]
@@ -75,6 +77,7 @@ export default function App() {
         {tab === 'triage' && <TriageScreen profile={profile} />}
         {tab === 'decisions' && <DecisionsScreen />}
         {tab === 'group' && inGroup && <GroupScreen profile={profile} />}
+        {tab === 'expansion' && <ExpansionScreen profile={profile} />}
         {tab === 'settings' && <SettingsScreen profile={profile} onSaved={setProfile} />}
         {tab === 'admin' && isAdmin && <AdminScreen />}
       </main>
