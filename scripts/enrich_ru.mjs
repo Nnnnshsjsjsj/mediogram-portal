@@ -17,7 +17,8 @@ import { createClient } from '@supabase/supabase-js'
 
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY } = process.env
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
-const LIMIT = Number(process.env.ENRICH_LIMIT || 25)
+// В выпуске до 20 исследований на направление; с онкологией — до 40.
+const LIMIT = Number(process.env.ENRICH_LIMIT || 50)
 
 for (const [k, v] of Object.entries({ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY })) {
   if (!v) { console.error(`${k} не задан`); process.exit(1) }
@@ -29,6 +30,24 @@ const CATEGORY_RU = {
   hf: 'сердечная недостаточность', mcs: 'механическая поддержка кровообращения',
   antithrombotic: 'антитромботическая терапия', antiarrhythmic: 'антиаритмическая терапия',
   devices: 'устройства', other: 'другое',
+  onc_breast: 'рак молочной железы', onc_lung: 'рак лёгкого',
+  onc_gi: 'колоректальный и абдоминальный рак', onc_uro: 'онкоурология',
+  onc_gyn: 'онкогинекология', onc_other: 'другие солидные опухоли',
+}
+
+// Что модель знает о направлении: для кого пишем и какие коды категорий допустимы.
+// other — общий код «не по профилю направления»: такие карточки видно сразу.
+const FIELD_PROFILE = {
+  cardiology: {
+    audience: 'кардиологов',
+    codes: ['arrhythmia', 'structural', 'hf', 'mcs', 'antithrombotic', 'antiarrhythmic', 'devices', 'other'],
+    rule: `category — определи по КЛИНИЧЕСКОЙ сути исследования (не по названию устройства и не по слову «ablation»), строго один код: arrhythmia (нарушения ритма, ЭФИ, аблация аритмий, стимуляторы/ИКД), structural (клапаны, окклюдеры, TAVR/LAA), hf (сердечная недостаточность), mcs (мех. поддержка кровообращения, шок), antithrombotic (антикоагулянты/антиагреганты), antiarrhythmic (антиаритмические препараты), devices (кардио-устройства вне прочих категорий), other (НЕ кардиологическое исследование — напр., щитовидная железа, онкология).`,
+  },
+  oncology: {
+    audience: 'онкологов',
+    codes: ['onc_breast', 'onc_lung', 'onc_gi', 'onc_uro', 'onc_gyn', 'onc_other', 'other'],
+    rule: `category — по локализации опухоли, строго один код: onc_breast (рак молочной железы), onc_lung (рак лёгкого, мезотелиома), onc_gi (колоректальный рак, рак желудка, пищевода, поджелудочной железы, печени, желчных путей), onc_uro (рак простаты, мочевого пузыря, почки), onc_gyn (рак яичников, шейки и тела матки), onc_other (другие солидные опухоли и исследования сразу нескольких локализаций), other (НЕ подходит центру: онкогематология — лейкозы, лимфомы, миелома; только дети; здоровые добровольцы; не онкология).`,
+  },
 }
 
 // --- ClinicalTrials.gov: официальные клинические данные исследования ---
@@ -79,13 +98,14 @@ async function writeRussian(trial, ctg) {
     radar_score: trial.score,
   }
 
-  const system = `Ты пишешь для кардиологов из Беларуси и Восточной Европы, которые не читают по-английски. Пиши по-русски, профессиональным медицинским языком, без маркетинга.
+  const profile = FIELD_PROFILE[trial.field] ?? FIELD_PROFILE.cardiology
+  const system = `Ты пишешь для ${profile.audience} из Беларуси и Восточной Европы, которые не читают по-английски. Пиши по-русски, профессиональным медицинским языком, без маркетинга.
 
 Строгое правило: используй ТОЛЬКО факты из переданного JSON. Ничего не додумывай. Если данных для части описания нет — напиши коротко на основе того, что есть, не выдумывай числа, центры и конечные точки.
 
 Верни ТОЛЬКО JSON без markdown и без пояснений, в формате:
 {
-  "title_ru": "заголовок исследования по-русски, понятный кардиологу, до 110 символов",
+  "title_ru": "заголовок исследования по-русски, понятный врачу-специалисту, до 110 символов",
   "summary_ru": "Суть: ...\\nМетодология: ...\\nЗначимость: ...",
   "score_reasons": ["строка 1", "строка 2", "строка 3"],
   "category": "один код из списка ниже"
@@ -97,7 +117,7 @@ summary_ru — ровно три абзаца, разделённых перев
   Методология: дизайн, рандомизация/ослепление, число пациентов, первичная конечная точка.
   Значимость: почему результат может повлиять на практику.
 score_reasons — 3-5 коротких строк: почему исследование получило балл ${facts.radar_score}. Опирайся на статус набора, фазу, страны центров, спонсора и попадание в профиль (${facts.category}). Каждая строка — до 100 символов.
-category — определи по КЛИНИЧЕСКОЙ сути исследования (не по названию устройства и не по слову «ablation»), строго один код: arrhythmia (нарушения ритма, ЭФИ, аблация аритмий, стимуляторы/ИКД), structural (клапаны, окклюдеры, TAVR/LAA), hf (сердечная недостаточность), mcs (мех. поддержка кровообращения, шок), antithrombotic (антикоагулянты/антиагреганты), antiarrhythmic (антиаритмические препараты), devices (кардио-устройства вне прочих категорий), other (НЕ кардиологическое исследование — напр., щитовидная железа, онкология).`
+${profile.rule}`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -124,7 +144,7 @@ category — определи по КЛИНИЧЕСКОЙ сути исслед�
     summary_ru: String(parsed.summary_ru),
     score_reasons: Array.isArray(parsed.score_reasons)
       ? parsed.score_reasons.map(String).slice(0, 6) : [],
-    category: ['arrhythmia','structural','hf','mcs','antithrombotic','antiarrhythmic','devices','other'].includes(parsed.category) ? parsed.category : null,
+    category: profile.codes.includes(parsed.category) ? parsed.category : null,
   }
 }
 

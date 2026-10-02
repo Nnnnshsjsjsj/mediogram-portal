@@ -3,7 +3,7 @@ import { getGroupDecisions, getGroupPeers, getLatestTrials, getMyGroups, logEven
 import { supabase } from '../lib/supabase'
 import StageTracker from '../components/StageTracker'
 import type { Decision, Group, Peer, Profile, Trial } from '../lib/types'
-import { CATEGORIES, STAGES, STATUS_GLYPH, STATUS_LABEL, peerName } from '../lib/types'
+import { CATEGORIES, STAGES, STATUS_GLYPH, STATUS_LABEL, peerName, trialField, userFields } from '../lib/types'
 
 export default function GroupScreen({ profile }: { profile: Profile }) {
   const [groups, setGroups] = useState<Group[]>([])
@@ -35,7 +35,9 @@ export default function GroupScreen({ profile }: { profile: Profile }) {
       const ds = await getGroupDecisions(ps.map((p) => p.id))
 
       // Исследования текущего выпуска + всё, по чему группа уже решала.
-      const { trials: digestTrials } = await getLatestTrials()
+      // Только направления, доступные зрителю: кардиологу не нужна онкологическая подборка.
+      const mine = userFields(profile)
+      const digestTrials = (await getLatestTrials()).trials.filter((t) => mine.includes(trialField(t)))
       const map = new Map<string, Trial>()
       for (const t of digestTrials) map.set(t.id, t)
       const missing = [...new Set(ds.map((d) => d.trial_id))].filter((id) => !map.has(id))

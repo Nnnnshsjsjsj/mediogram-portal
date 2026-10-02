@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { updateMyProfile } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/types'
-import { CATEGORIES } from '../lib/types'
+import { CATEGORIES, FIELDS, categoriesOf, userFields } from '../lib/types'
 
 export default function SettingsScreen({ profile, onSaved }: { profile: Profile; onSaved: (p: Profile) => void }) {
   const [name, setName] = useState(profile.full_name)
@@ -40,16 +40,25 @@ export default function SettingsScreen({ profile, onSaved }: { profile: Profile;
           placeholder="например, аритмология" className={inputCls} />
       </Field>
 
-      <Field label="Мои категории" hint="Выберите направления, которые хотите получать. Если ничего не выбрано — приходят все категории.">
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(CATEGORIES).map(([k, label]) => (
-            <button key={k} onClick={() => toggle(k)}
-              className="text-[12px] px-3 py-1.5 rounded-full border transition-colors"
-              style={cats.has(k)
-                ? { borderColor: 'var(--teal)', color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' }
-                : { borderColor: 'var(--line)', color: 'var(--muted)' }}>
-              {label}
-            </button>
+      <Field label="Мои категории" hint="Выберите, что хотите получать. Если в направлении ничего не выбрано — приходит всё направление.">
+        <div className="flex flex-col gap-3">
+          {userFields(profile).map((f) => (
+            <div key={f} className="flex flex-col gap-1.5">
+              {userFields(profile).length > 1 && (
+                <span className="text-[12px] font-medium">{FIELDS[f].label}</span>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {categoriesOf(f).map((k) => (
+                  <button key={k} type="button" onClick={() => toggle(k)}
+                    className="text-[12px] px-3 py-1.5 rounded-full border transition-colors"
+                    style={cats.has(k)
+                      ? { borderColor: 'var(--teal)', color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' }
+                      : { borderColor: 'var(--line)', color: 'var(--muted)' }}>
+                    {CATEGORIES[k]}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </Field>
@@ -78,10 +87,10 @@ const inputCls = 'w-full rounded-xl border border-[var(--line)] bg-[var(--panel)
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
       <span className="text-[12px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</span>
       {children}
       {hint && <span className="text-[11px] text-[var(--muted)]/70">{hint}</span>}
-    </label>
+    </div>
   )
 }

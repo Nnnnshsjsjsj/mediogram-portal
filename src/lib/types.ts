@@ -11,11 +11,13 @@ export interface Profile {
   categories: string[]   // подписки; [] = все категории
   cc_emails: string[]
   is_active: boolean
+  fields?: Field[]       // доступные направления; админ видит все
 }
 
 export interface Trial {
   id: string
   nct_id: string
+  field?: Field
   title: string
   title_ru: string | null
   summary_ru: string
@@ -99,7 +101,33 @@ export interface Digest {
 
 // Канонический словарь категорий. Ключи совпадают с деривацией в боте
 // (см. scripts/sync_to_db.mjs) и хранятся в trials.category / profiles.categories.
+// ---------- Направления ----------
+// Каждое направление — отдельная вкладка триажа и свой раздел в письме.
+// Новое направление = запись здесь + категории ниже + блок в радаре
+// (mediogram-lead-radar → FIELDS) и в scripts/sync_to_db.mjs / enrich_ru.mjs.
+export type Field = 'cardiology' | 'oncology'
+
+export const FIELDS: Record<Field, { label: string }> = {
+  cardiology: { label: 'Кардиология' },
+  oncology: { label: 'Онкология' },
+}
+export const FIELD_ORDER: Field[] = ['cardiology', 'oncology']
+
+// Какие направления видит пользователь. Админ — все.
+export function userFields(p: Pick<Profile, 'role' | 'fields'>): Field[] {
+  if (p.role === 'admin') return FIELD_ORDER
+  const own = (p.fields ?? ['cardiology']).filter((f): f is Field => f in FIELDS)
+  return own.length ? FIELD_ORDER.filter((f) => own.includes(f)) : ['cardiology']
+}
+
+export function trialField(t: Pick<Trial, 'field'>): Field {
+  return t.field && t.field in FIELDS ? t.field : 'cardiology'
+}
+
+// Канонический словарь категорий. Ключи совпадают с деривацией в боте
+// (см. scripts/sync_to_db.mjs) и хранятся в trials.category / profiles.categories.
 export const CATEGORIES: Record<string, string> = {
+  // кардиология
   arrhythmia: 'Аритмология',
   structural: 'Структурные вмешательства',
   hf: 'Сердечная недостаточность',
@@ -108,6 +136,32 @@ export const CATEGORIES: Record<string, string> = {
   antiarrhythmic: 'Антиаритмическая терапия',
   devices: 'Устройства (прочее)',
   other: 'Другое',
+  // онкология
+  onc_breast: 'Рак молочной железы',
+  onc_lung: 'Рак лёгкого',
+  onc_gi: 'Колоректальный и абдоминальный рак',
+  onc_uro: 'Онкоурология',
+  onc_gyn: 'Онкогинекология',
+  onc_other: 'Другие солидные опухоли',
+}
+
+export const CATEGORY_FIELD: Record<string, Field> = {
+  arrhythmia: 'cardiology', structural: 'cardiology', hf: 'cardiology', mcs: 'cardiology',
+  antithrombotic: 'cardiology', antiarrhythmic: 'cardiology', devices: 'cardiology', other: 'cardiology',
+  onc_breast: 'oncology', onc_lung: 'oncology', onc_gi: 'oncology',
+  onc_uro: 'oncology', onc_gyn: 'oncology', onc_other: 'oncology',
+}
+
+export function categoriesOf(field: Field): string[] {
+  return Object.keys(CATEGORIES).filter((k) => CATEGORY_FIELD[k] === field)
+}
+
+// Подписки врача в пределах направления. Пустой набор = всё направление:
+// врач, который выбрал кардио-категории, получает онкологию целиком, пока
+// не выберет онкологические.
+export function subscriptionsFor(categories: string[], field: Field): Set<string> | null {
+  const mine = categories.filter((c) => CATEGORY_FIELD[c] === field)
+  return mine.length ? new Set(mine) : null
 }
 
 export const STAGES: Record<WorkStage, string> = {

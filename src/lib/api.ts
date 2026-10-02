@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import type { Decision, DecisionStatus, Group, GroupMember, Peer, Profile, Trial, TrialContacts, TrialContactsData, WorkStage } from './types'
-import { peerName } from './types'
+import { peerName, trialField } from './types'
+import type { Field } from './types'
 import type { ExpansionData, ExpansionRequest, ExpansionStatus } from './expansion'
 import { normalizeExpansionData } from './expansion'
 
@@ -20,7 +21,10 @@ export async function updateMyProfile(patch: Partial<Pick<Profile, 'full_name' |
 }
 
 // Последний выпуск + его исследования. Если выпусков ещё нет — просто свежие trials.
-export async function getLatestTrials(): Promise<{ weekStart: string | null; trials: Trial[] }> {
+// Последний выпуск + его исследования. Выпуск один на неделю, в нём своя
+// подборка на каждое направление — `field` оставляет только нужную.
+// Если выпусков ещё нет или в выпуске нет этого направления — свежие trials.
+export async function getLatestTrials(field?: Field): Promise<{ weekStart: string | null; trials: Trial[] }> {
   const { data: digest } = await supabase
     .from('digests').select('id, week_start')
     .order('week_start', { ascending: false }).limit(1).maybeSingle()
@@ -32,12 +36,13 @@ export async function getLatestTrials(): Promise<{ weekStart: string | null; tri
       .eq('digest_id', digest.id)
       .order('rank')
     if (error) throw error
-    const trials = (data ?? []).map((r) => r.trials as unknown as Trial)
-    return { weekStart: digest.week_start, trials }
+    const all = (data ?? []).map((r) => r.trials as unknown as Trial).filter(Boolean)
+    const trials = field ? all.filter((t) => trialField(t) === field) : all
+    if (trials.length || !field) return { weekStart: digest.week_start, trials }
   }
-  const { data, error } = await supabase
-    .from('trials').select('*')
-    .order('first_seen_at', { ascending: false }).limit(60)
+  let q = supabase.from('trials').select('*')
+  if (field) q = q.eq('field', field)
+  const { data, error } = await q.order('first_seen_at', { ascending: false }).limit(60)
   if (error) throw error
   return { weekStart: null, trials: (data ?? []) as Trial[] }
 }
