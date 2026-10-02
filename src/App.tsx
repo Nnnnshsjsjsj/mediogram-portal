@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { getMyGroups, getMyProfile, logEvent } from './lib/api'
-import type { Profile } from './lib/types'
+import type { Field, Profile } from './lib/types'
+import { FIELDS, userFields } from './lib/types'
 import TriageScreen from './screens/TriageScreen'
 import DecisionsScreen from './screens/DecisionsScreen'
 import GroupScreen from './screens/GroupScreen'
@@ -10,13 +11,13 @@ import ExpansionScreen from './screens/ExpansionScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import AdminScreen from './admin/AdminScreen'
 
-type Tab = 'triage' | 'decisions' | 'group' | 'expansion' | 'settings' | 'admin'
+type Tab = `triage:${Field}` | 'decisions' | 'group' | 'expansion' | 'settings' | 'admin'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [tab, setTab] = useState<Tab>('triage')
+  const [tab, setTab] = useState<Tab>('triage:cardiology')
   const [inGroup, setInGroup] = useState(false)
 
   useEffect(() => {
@@ -44,8 +45,15 @@ export default function App() {
   if (!profile) return <FullScreen><Spinner text="Загрузка профиля…" /></FullScreen>
 
   const isAdmin = profile.role === 'admin'
+  // Одно направление — привычная вкладка «Триаж»; несколько — по вкладке на каждое.
+  const myFields = userFields(profile)
+  const triageTabs: { id: Tab; label: string }[] = myFields.length === 1
+    ? [{ id: `triage:${myFields[0]}`, label: 'Триаж' }]
+    : myFields.map((f) => ({ id: `triage:${f}` as Tab, label: FIELDS[f].label }))
+  const activeTab: Tab = tab.startsWith('triage:') && !myFields.includes(tab.slice(7) as Field)
+    ? `triage:${myFields[0]}` : tab
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'triage', label: 'Триаж' },
+    ...triageTabs,
     { id: 'decisions', label: 'Мои решения' },
     ...(inGroup ? [{ id: 'group' as Tab, label: 'Группа' }] : []),
     { id: 'expansion', label: 'Новое направление' },
@@ -57,15 +65,15 @@ export default function App() {
     <div className="min-h-[100dvh] bg-[var(--bg)]">
       <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--panel)]/85 backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 h-14 flex items-center gap-5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <RadarMark />
             <span className="font-semibold text-[14px]">Mediogram Portal</span>
           </div>
-          <nav className="flex gap-1 ml-auto">
+          <nav className="flex gap-1 ml-auto overflow-x-auto min-w-0">
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
-                style={tab === t.id ? { color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' } : { color: 'var(--muted)' }}>
+                className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap shrink-0"
+                style={activeTab === t.id ? { color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' } : { color: 'var(--muted)' }}>
                 {t.label}
               </button>
             ))}
@@ -74,12 +82,15 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6 pb-24">
-        {tab === 'triage' && <TriageScreen profile={profile} />}
-        {tab === 'decisions' && <DecisionsScreen />}
-        {tab === 'group' && inGroup && <GroupScreen profile={profile} />}
-        {tab === 'expansion' && <ExpansionScreen profile={profile} />}
-        {tab === 'settings' && <SettingsScreen profile={profile} onSaved={setProfile} />}
-        {tab === 'admin' && isAdmin && <AdminScreen />}
+        {activeTab.startsWith('triage:') && (
+          <TriageScreen key={activeTab} profile={profile} field={activeTab.slice(7) as Field}
+            showFieldTitle={myFields.length > 1} />
+        )}
+        {activeTab === 'decisions' && <DecisionsScreen />}
+        {activeTab === 'group' && inGroup && <GroupScreen profile={profile} />}
+        {activeTab === 'expansion' && <ExpansionScreen profile={profile} />}
+        {activeTab === 'settings' && <SettingsScreen profile={profile} onSaved={setProfile} />}
+        {activeTab === 'admin' && isAdmin && <AdminScreen />}
       </main>
     </div>
   )

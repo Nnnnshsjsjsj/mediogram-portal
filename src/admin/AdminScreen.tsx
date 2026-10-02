@@ -11,7 +11,8 @@ import TrialCard from '../components/TrialCard'
 import ContactPanel from '../components/ContactPanel'
 import ExpansionAdmin from './ExpansionAdmin'
 import type { Decision, Group, GroupMember, Profile, Trial, TrialContacts, WorkStage } from '../lib/types'
-import { STAGES, peerName } from '../lib/types'
+import { FIELDS, FIELD_ORDER, STAGES, peerName, trialField } from '../lib/types'
+import type { Field } from '../lib/types'
 
 export default function AdminScreen() {
   const [doctors, setDoctors] = useState<Profile[]>([])
@@ -27,6 +28,7 @@ export default function AdminScreen() {
   const [members, setMembers] = useState<GroupMember[]>([])
   const [newGroup, setNewGroup] = useState('')
   const [groupMsg, setGroupMsg] = useState('')
+  const [matrixField, setMatrixField] = useState<Field>('cardiology')
   const [contacts, setContacts] = useState<Map<string, TrialContacts>>(new Map())
   const [contactBusy, setContactBusy] = useState<Set<string>>(new Set())
   const [contactErr, setContactErr] = useState<Map<string, string>>(new Map())
@@ -207,7 +209,18 @@ export default function AdminScreen() {
 
   if (loading) return <p className="py-16 text-center text-[13px] text-[var(--muted)]">Загрузка…</p>
 
-  const currentTrials = trials.filter((t) => !t.is_upcoming)
+  const fieldsWithTrials = FIELD_ORDER.filter((f) => trials.some((t) => !t.is_upcoming && trialField(t) === f))
+  const currentTrials = trials.filter((t) => !t.is_upcoming && trialField(t) === matrixField)
+  // В матрице направления — только те, у кого к нему есть доступ (админы видят всё).
+  const matrixDoctors = activeDoctors.filter((d) => d.role === 'admin' || (d.fields ?? ['cardiology']).includes(matrixField))
+
+  async function toggleField(d: Profile, f: Field) {
+    const cur = d.fields ?? ['cardiology']
+    const next = cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]
+    if (!next.length) return   // хотя бы одно направление у врача должно быть
+    setDoctors((prev) => prev.map((x) => (x.id === d.id ? { ...x, fields: next } : x)))
+    try { await adminUpdateDoctor(d.id, { fields: next }) } catch { loadAll() }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -226,13 +239,26 @@ export default function AdminScreen() {
 
       {/* Матрица решений */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-[14px] font-semibold">Матрица решений — текущий выпуск</h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-[14px] font-semibold">Матрица решений — текущий выпуск</h2>
+          {fieldsWithTrials.length > 1 && (
+            <div className="flex rounded-xl border border-[var(--line)] overflow-hidden ml-auto">
+              {fieldsWithTrials.map((f) => (
+                <button key={f} onClick={() => setMatrixField(f)}
+                  className="px-3 py-1.5 text-[12px] font-medium transition-colors"
+                  style={matrixField === f ? { background: 'var(--teal)', color: 'var(--on-accent)' } : { color: 'var(--muted)' }}>
+                  {FIELDS[f].label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="overflow-x-auto rounded-2xl border border-[var(--line)]">
           <table className="min-w-full text-[12px]">
             <thead>
               <tr className="bg-[var(--panel)]">
                 <th className="text-left px-3 py-2.5 font-medium text-[var(--muted)] sticky left-0 bg-[var(--panel)]">Исследование</th>
-                {activeDoctors.map((d) => (
+                {matrixDoctors.map((d) => (
                   <th key={d.id} className="px-2 py-2.5 font-medium text-[var(--muted)] whitespace-nowrap">
                     {d.full_name || d.email.split('@')[0]}
                   </th>
@@ -242,14 +268,14 @@ export default function AdminScreen() {
             </thead>
             <tbody>
               {currentTrials.map((t) => {
-                const acceptCount = activeDoctors.filter((d) => decMap.get(`${d.id}:${t.id}`)?.status === 'accepted').length
+                const acceptCount = matrixDoctors.filter((d) => decMap.get(`${d.id}:${t.id}`)?.status === 'accepted').length
                 return (
                   <tr key={t.id} className="border-t border-[var(--line)]">
                     <td className="px-3 py-2 sticky left-0 bg-[var(--card)] max-w-[280px]">
                       <span className="mono text-[10px] text-[var(--muted)] block">{t.nct_id}</span>
                       <span className="line-clamp-1">{t.title_ru || t.title}</span>
                     </td>
-                    {activeDoctors.map((d) => {
+                    {matrixDoctors.map((d) => {
                       const dec = decMap.get(`${d.id}:${t.id}`)
                       const glyph = dec?.status === 'accepted' ? '✅' : dec?.status === 'rejected' ? '❌' : dec?.status === 'deferred' ? '🕐' : '·'
                       const title = dec?.status === 'accepted' && dec.work_stage ? STAGES[dec.work_stage] : ''
@@ -262,7 +288,7 @@ export default function AdminScreen() {
                 )
               })}
               {currentTrials.length === 0 && (
-                <tr><td className="px-3 py-6 text-center text-[var(--muted)]" colSpan={activeDoctors.length + 2}>Выпуск ещё не сформирован.</td></tr>
+                <tr><td className="px-3 py-6 text-center text-[var(--muted)]" colSpan={matrixDoctors.length + 2}>Выпуск ещё не сформирован.</td></tr>
               )}
             </tbody>
           </table>
@@ -340,6 +366,22 @@ export default function AdminScreen() {
                   ? <span style={{ color: 'var(--teal)' }}>{groupsOfDoctor.get(d.id)!.join(', ')}</span>
                   : 'без группы'}
               </div>
+              {d.role !== 'admin' && (
+                <div className="flex gap-1" title="Направления, доступные врачу">
+                  {FIELD_ORDER.map((f) => {
+                    const on = (d.fields ?? ['cardiology']).includes(f)
+                    return (
+                      <button key={f} onClick={() => toggleField(d, f)}
+                        className="text-[11px] px-2 py-0.5 rounded-full border transition-colors"
+                        style={on
+                          ? { borderColor: 'var(--teal)', color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' }
+                          : { borderColor: 'var(--line)', color: 'var(--muted)' }}>
+                        {on ? '✓ ' : ''}{FIELDS[f].label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <button onClick={async () => { await adminUpdateDoctor(d.id, { is_active: !d.is_active }); loadAll() }}
                 className="ml-auto text-[12px] hover:underline"
                 style={{ color: d.is_active ? 'var(--red)' : 'var(--green)' }}>

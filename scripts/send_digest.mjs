@@ -22,6 +22,21 @@ const CATEGORIES = {
   arrhythmia: 'Аритмология', structural: 'Структурные вмешательства', hf: 'Сердечная недостаточность',
   mcs: 'Мех. поддержка кровообращения', antithrombotic: 'Антитромботическая терапия',
   antiarrhythmic: 'Антиаритмическая терапия', devices: 'Устройства', other: 'Другое',
+  onc_breast: 'Рак молочной железы', onc_lung: 'Рак лёгкого', onc_gi: 'Колоректальный и абдоминальный рак',
+  onc_uro: 'Онкоурология', onc_gyn: 'Онкогинекология', onc_other: 'Другие солидные опухоли',
+}
+
+// Направления: подпись в письме, к какому относится категория и как часто
+// слать. Онкология — раз в две недели (так попросил центр в заявке).
+const FIELDS = {
+  cardiology: { label: 'Кардиология', everyWeeks: 1 },
+  oncology: { label: 'Онкология', everyWeeks: 2 },
+}
+const CATEGORY_FIELD = (cat) => (String(cat).startsWith('onc_') ? 'oncology' : 'cardiology')
+
+// Номер недели от понедельника 05.10.2026 (первая неделя онкологии) — для «раз в N недель».
+function weekIndex(weekStart) {
+  return Math.round((Date.parse(weekStart) - Date.parse('2026-10-05')) / (7 * 86400_000))
 }
 
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
@@ -35,7 +50,20 @@ function trialBlock(t) {
   </td></tr>`
 }
 
-function emailHtml(doctorName, week, current, upcoming) {
+function fieldSection(label, current, upcoming, showLabel) {
+  return `
+    <tr><td style="padding:0 28px;">
+      ${showLabel ? `<div style="font:700 14px Inter,Arial;color:#E6EDF7;margin-top:18px;padding-top:14px;border-top:1px solid #1E2C46;">${esc(label)}</div>` : ''}
+      <table role="presentation" width="100%">${current.slice(0, 5).map(trialBlock).join('')}</table>
+      ${upcoming.length ? `
+      <div style="font:600 12px Inter,Arial;color:#FFC24B;letter-spacing:.08em;text-transform:uppercase;margin-top:20px;">Скоро откроются</div>
+      <table role="presentation" width="100%">${upcoming.slice(0, 3).map(trialBlock).join('')}</table>` : ''}
+    </td></tr>`
+}
+
+function emailHtml(doctorName, week, sections) {
+  const current = sections.flatMap((x) => x.current)
+  const upcoming = sections.flatMap((x) => x.upcoming)
   return `<!doctype html><html><body style="margin:0;background:#040810;padding:24px 12px;">
   <table role="presentation" width="100%" style="max-width:600px;margin:0 auto;background:#070C16;border:1px solid #1E2C46;border-radius:16px;">
     <tr><td style="padding:28px 28px 8px;">
@@ -44,12 +72,7 @@ function emailHtml(doctorName, week, current, upcoming) {
       <p style="font:14px/1.5 Inter,Arial;color:#8FA3C0;">${esc(doctorName || 'Уважаемый коллега')}, в подборке этой недели ${current.length} актуальных исследований${upcoming.length ? ` и ${upcoming.length} готовящихся к запуску` : ''}. Ключевые — ниже; полный список, фильтры и триаж — в личном кабинете.</p>
       <a href="${esc(PORTAL_URL)}" style="display:inline-block;background:#00C2C7;color:#040810;font:600 14px Inter,Arial;padding:12px 22px;border-radius:12px;text-decoration:none;margin:6px 0 18px;">Открыть кабинет и разобрать выпуск</a>
     </td></tr>
-    <tr><td style="padding:0 28px;">
-      <table role="presentation" width="100%">${current.slice(0, 5).map(trialBlock).join('')}</table>
-      ${upcoming.length ? `
-      <div style="font:600 12px Inter,Arial;color:#FFC24B;letter-spacing:.08em;text-transform:uppercase;margin-top:20px;">Скоро откроются</div>
-      <table role="presentation" width="100%">${upcoming.slice(0, 3).map(trialBlock).join('')}</table>` : ''}
-    </td></tr>
+    ${sections.map((x) => fieldSection(x.label, x.current, x.upcoming, sections.length > 1)).join('')}
     <tr><td style="padding:20px 28px 28px;">
       <div style="font:11px Inter,Arial;color:#8FA3C0;">Письмо для внутреннего использования UAB Mediogram. Вход в кабинет — по персональной одноразовой ссылке, которую вы запрашиваете сами на странице входа.</div>
     </td></tr>
@@ -92,21 +115,33 @@ async function main() {
   for (const doc of doctors ?? []) {
     if (alreadySent.has(doc.id)) { skipped++; continue }
 
-    const subs = doc.categories?.length ? new Set(doc.categories) : null
-    const mine = all.filter((t) => !subs || subs.has(t.category))
-    const current = mine.filter((t) => t.__section === 'current')
-    const upcoming = mine.filter((t) => t.__section === 'upcoming')
-    if (!current.length && !upcoming.length) { skipped++; continue }
+    // По каждому доступному врачу направлению — свой раздел. Подписки
+    // считаются внутри направления: нет категорий направления = всё направление.
+    const sections = []
+    for (const [f, cfg] of Object.entries(FIELDS)) {
+      if (!(doc.fields ?? ['cardiology']).includes(f)) continue
+      if (weekIndex(digest.week_start) % cfg.everyWeeks !== 0) continue
+      const own = (doc.categories ?? []).filter((c) => CATEGORY_FIELD(c) === f)
+      const subs = own.length ? new Set(own) : null
+      const mine = all.filter((t) => (t.field ?? 'cardiology') === f && (!subs || subs.has(t.category)))
+      const current = mine.filter((t) => t.__section === 'current')
+      const upcoming = mine.filter((t) => t.__section === 'upcoming')
+      if (current.length || upcoming.length) sections.push({ field: f, label: cfg.label, current, upcoming })
+    }
+    if (!sections.length) { skipped++; continue }
+    const current = sections.flatMap((x) => x.current)
+    const upcoming = sections.flatMap((x) => x.upcoming)
 
     await sendResend({
       from: FROM_EMAIL,
       to: [doc.email],
       subject: `Радар исследований · неделя ${digest.week_start} · ${current.length} новых`,
-      html: emailHtml(doc.full_name, digest.week_start, current, upcoming),
+      html: emailHtml(doc.full_name, digest.week_start, sections),
     })
     await db.from('activity_log').insert({
       user_id: doc.id, event: 'digest_sent',
-      meta: { week: digest.week_start, current: current.length, upcoming: upcoming.length },
+      meta: { week: digest.week_start, current: current.length, upcoming: upcoming.length,
+              fields: sections.map((x) => x.field) },
     })
     sent++
     await new Promise((r) => setTimeout(r, 600)) // бережём rate limit Resend

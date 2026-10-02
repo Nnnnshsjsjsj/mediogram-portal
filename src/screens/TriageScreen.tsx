@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import TrialCard from '../components/TrialCard'
 import { clearDecision, decide, getLatestTrials, getMyDecisions, getMyWatches, logEvent, toggleWatch } from '../lib/api'
-import type { Decision, DecisionStatus, Profile, Trial } from '../lib/types'
-import { CATEGORIES } from '../lib/types'
+import type { Decision, DecisionStatus, Field, Profile, Trial } from '../lib/types'
+import { CATEGORIES, CATEGORY_FIELD, FIELDS, subscriptionsFor } from '../lib/types'
 
 type SubTab = 'current' | 'upcoming'
 
-export default function TriageScreen({ profile }: { profile: Profile }) {
+export default function TriageScreen({ profile, field = 'cardiology', showFieldTitle = false }: { profile: Profile; field?: Field; showFieldTitle?: boolean }) {
   const [trials, setTrials] = useState<Trial[]>([])
   const [weekStart, setWeekStart] = useState<string | null>(null)
   const [decisions, setDecisions] = useState<Map<string, Decision>>(new Map())
@@ -23,21 +23,21 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
   useEffect(() => {
     ;(async () => {
       const [{ weekStart, trials }, ds, ws] = await Promise.all([
-        getLatestTrials(), getMyDecisions(), getMyWatches(),
+        getLatestTrials(field), getMyDecisions(), getMyWatches(),
       ])
       setWeekStart(weekStart)
       setTrials(trials)
       setDecisions(new Map(ds.map((d) => [d.trial_id, d])))
       setWatches(ws)
       setLoading(false)
-      logEvent('digest_view', { week: weekStart })
+      logEvent('digest_view', { week: weekStart, field })
     })()
-  }, [])
+  }, [field])
 
-  // Подписки врача: пустой массив = все категории.
+  // Подписки врача в пределах направления: нет категорий этого направления = всё направление.
   const subscribed = useMemo(
-    () => (profile.categories.length ? new Set(profile.categories) : null),
-    [profile.categories],
+    () => subscriptionsFor(profile.categories, field),
+    [profile.categories, field],
   )
 
   const visible = useMemo(() => {
@@ -118,7 +118,9 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-semibold">Триаж исследований</h1>
+          <h1 className="text-lg font-semibold">
+            Триаж исследований{showFieldTitle ? ` · ${FIELDS[field].label}` : ''}
+          </h1>
           <p className="mono text-[11px] text-[var(--muted)]">
             {weekStart ? `Выпуск недели ${weekStart}` : 'Актуальная лента'}
           </p>
@@ -137,6 +139,7 @@ export default function TriageScreen({ profile }: { profile: Profile }) {
       {/* Фильтры */}
       <div className="flex flex-wrap gap-1.5">
         {Object.entries(CATEGORIES)
+          .filter(([k]) => CATEGORY_FIELD[k] === field)
           .filter(([k]) => !subscribed || subscribed.has(k))
           .filter(([k]) => trials.some((t) => t.category === k))
           .map(([k, label]) => (

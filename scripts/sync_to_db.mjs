@@ -7,9 +7,10 @@
 //
 // Контракт полей от бота (все опциональны, кроме nct/title):
 //   nct, title, title_ru, summary, summary_ru, status, phase, sponsor,
-//   countries[], conditions[], url, posted, category
+//   countries[], conditions[], url, posted, category, source, field
 // Если бот не проставил category — деривация ниже (та же логика, что в радаре,
-// плюс фарм-категории для арритмологии).
+// плюс фарм-категории для арритмологии; для онкологии — по локализации опухоли).
+// field (радар v8): cardiology | oncology. Нет поля — значит кардиология.
 
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -37,13 +38,31 @@ const CATEGORY_RULES = [
   ['hf', ['heart failure', 'hfpef', 'hfref', 'cardiomyopathy', 'myocardial regeneration', 'ejection fraction']],
 ]
 
+// Онкология: категория = локализация опухоли. Порядок важен — первое совпадение.
+const ONCOLOGY_CATEGORY_RULES = [
+  ['onc_breast', ['breast']],
+  ['onc_lung', ['lung', 'nsclc', 'sclc', 'mesothelioma']],
+  ['onc_uro', ['prostate', 'bladder', 'urothelial', 'renal cell', 'kidney cancer', 'testicular', 'penile']],
+  ['onc_gyn', ['ovarian', 'cervical', 'cervix', 'endometrial', 'uterine', 'vulvar', 'fallopian', 'peritoneal']],
+  ['onc_gi', ['colorectal', 'colon', 'rectal', 'gastric', 'stomach', 'esophag', 'oesophag', 'gastroesophageal',
+    'pancrea', 'hepatocellular', 'liver cancer', 'biliary', 'cholangio', 'gallbladder', 'anal cancer',
+    'gastrointestinal', 'abdominal']],
+]
+
+const KNOWN_FIELDS = new Set(['cardiology', 'oncology'])
+
+function fieldOf(lead) {
+  return String(lead.field ?? 'cardiology').toLowerCase()
+}
+
 function deriveCategory(lead) {
   const hay = [lead.title, ...(lead.conditions ?? []), lead.summary ?? '']
     .filter(Boolean).join(' ').toLowerCase()
-  for (const [cat, terms] of CATEGORY_RULES) {
+  const oncology = fieldOf(lead) === 'oncology'
+  for (const [cat, terms] of oncology ? ONCOLOGY_CATEGORY_RULES : CATEGORY_RULES) {
     if (terms.some((t) => hay.includes(t))) return cat
   }
-  return 'devices'
+  return oncology ? 'onc_other' : 'devices'
 }
 
 function normStatus(s) {
@@ -87,18 +106,26 @@ async function main() {
   const leads = Array.isArray(latest.leads) ? latest.leads : []
   console.log(`Прочитано лидов: ${leads.length}`)
 
-  const bySource = {}
-  for (const l of leads) { const src = sourceOf(l); bySource[src] = (bySource[src] ?? 0) + 1 }
+  const bySource = {}, byField = {}
+  for (const l of leads) {
+    const src = sourceOf(l); bySource[src] = (bySource[src] ?? 0) + 1
+    const f = fieldOf(l); byField[f] = (byField[f] ?? 0) + 1
+  }
   console.log(`По источникам: ${JSON.stringify(bySource)}; принимаем: ${[...ALLOWED_SOURCES].join(', ')}`)
+  console.log(`По направлениям: ${JSON.stringify(byField)}`)
+  const unknown = Object.keys(byField).filter((f) => !KNOWN_FIELDS.has(f))
+  if (unknown.length) console.log(`::warning::Радар прислал неизвестные направления ${unknown.join(', ')} — пропускаем`)
 
   const rows = leads
     .filter((l) => l.nct && l.title)
     .filter((l) => ALLOWED_SOURCES.has(sourceOf(l)))
+    .filter((l) => KNOWN_FIELDS.has(fieldOf(l)))
     .map((l) => {
       const status = normStatus(l.status)
       return {
         nct_id: String(l.nct),
         title: String(l.title),
+        field: fieldOf(l),
         // title_ru / summary_ru / score_reasons пишет только enrich_ru.mjs.
         category: String(l.category ?? deriveCategory(l)),
         recruitment_status: status,
@@ -126,11 +153,13 @@ async function main() {
   const { data: upserted, error: upErr } = await db
     .from('trials')
     .upsert(rows, { onConflict: 'nct_id' })
-    .select('id, nct_id, is_upcoming, first_posted, score')
+    .select('id, nct_id, field, is_upcoming, first_posted, score')
   if (upErr) throw upErr
   console.log(`Upsert в trials: ${upserted.length}`)
 
-  // Выпуск недели: только отборное — топ-15 актуальных + топ-5 будущих по баллу.
+  // Выпуск недели: только отборное — по каждому направлению свои
+  // топ-15 актуальных + топ-5 будущих по баллу. Выпуск один на неделю,
+  // фронт и рассылка делят его по trials.field.
   const TOP_CURRENT = 15
   const TOP_UPCOMING = 5
   const week = mondayOfThisWeek()
@@ -142,8 +171,16 @@ async function main() {
 
   const byScore = (a, b) => (b.score ?? -1) - (a.score ?? -1)
     || String(b.first_posted ?? '').localeCompare(String(a.first_posted ?? ''))
-  const current = upserted.filter((t) => !t.is_upcoming).sort(byScore).slice(0, TOP_CURRENT)
-  const upcoming = upserted.filter((t) => t.is_upcoming).sort(byScore).slice(0, TOP_UPCOMING)
+  const current = [], upcoming = []
+  const perField = {}
+  for (const f of KNOWN_FIELDS) {
+    const mine = upserted.filter((t) => (t.field ?? 'cardiology') === f)
+    const c = mine.filter((t) => !t.is_upcoming).sort(byScore).slice(0, TOP_CURRENT)
+    const u = mine.filter((t) => t.is_upcoming).sort(byScore).slice(0, TOP_UPCOMING)
+    current.push(...c); upcoming.push(...u)
+    perField[f] = `${c.length}+${u.length}`
+  }
+  console.log(`Выпуск по направлениям (актуальные+будущие): ${JSON.stringify(perField)}`)
   const dt = [...current, ...upcoming].map((t, i) => ({
     digest_id: digest.id,
     trial_id: t.id,
