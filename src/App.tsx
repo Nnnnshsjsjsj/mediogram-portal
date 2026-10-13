@@ -61,27 +61,53 @@ export default function App() {
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Админ' }] : []),
   ]
 
+  // Админке нужна ширина под таблицу, остальным экранам — удобная строка чтения.
+  const wide = activeTab === 'admin'
+  const displayName = profile.full_name || profile.email.split('@')[0]
+
   return (
     <div className="min-h-[100dvh] bg-[var(--bg)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--panel)]/85 backdrop-blur">
-        <div className="mx-auto max-w-4xl px-4 h-14 flex items-center gap-5">
-          <div className="flex items-center gap-2 shrink-0">
-            <RadarMark />
-            <span className="font-semibold text-[14px]">Mediogram Portal</span>
+      <header className="sticky top-0 z-40" style={{ background: 'var(--nav)', borderBottom: '1px solid var(--nav-line)' }}>
+        <div className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-5xl'} px-4 h-14 flex items-center gap-4`}>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <RadarMark size={26} animated />
+            <div className="leading-tight hidden sm:block">
+              <div className="text-[14px] font-semibold" style={{ color: 'var(--nav-text)' }}>Mediogram</div>
+              <div className="mono text-[10px] tracking-wide" style={{ color: 'var(--nav-muted)' }}>PORTAL</div>
+            </div>
           </div>
-          <nav className="flex gap-1 ml-auto overflow-x-auto min-w-0">
-            {tabs.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap shrink-0"
-                style={activeTab === t.id ? { color: 'var(--teal)', background: 'rgba(0,194,199,0.08)' } : { color: 'var(--muted)' }}>
-                {t.label}
-              </button>
-            ))}
+
+          <nav className="flex gap-0.5 ml-2 overflow-x-auto min-w-0 flex-1" aria-label="Разделы">
+            {tabs.map((t) => {
+              const on = activeTab === t.id
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  aria-current={on ? 'page' : undefined}
+                  className="relative px-3 h-9 rounded-[10px] text-[13px] font-medium transition-colors whitespace-nowrap shrink-0"
+                  style={on
+                    ? { color: '#FFFFFF', background: 'var(--nav-2)' }
+                    : { color: 'var(--nav-muted)' }}>
+                  {t.label}
+                  {on && <span className="absolute left-3 right-3 -bottom-[11px] h-[2px] rounded-full" style={{ background: 'var(--teal-bright)' }} />}
+                </button>
+              )
+            })}
           </nav>
+
+          <div className="hidden md:flex items-center gap-2 shrink-0 pl-3" style={{ borderLeft: '1px solid var(--nav-line)' }}>
+            <span className="w-7 h-7 rounded-full grid place-items-center text-[12px] font-semibold"
+              style={{ background: 'var(--nav-2)', color: 'var(--teal-bright)', border: '1px solid var(--nav-line)' }}>
+              {displayName.slice(0, 1).toUpperCase()}
+            </span>
+            <div className="leading-tight max-w-[160px]">
+              <div className="text-[12px] font-medium truncate" style={{ color: 'var(--nav-text)' }}>{displayName}</div>
+              <div className="text-[10.5px]" style={{ color: 'var(--nav-muted)' }}>{isAdmin ? 'Администратор' : 'Врач'}</div>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-24">
+      <main className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-4xl'} px-4 py-7 pb-24`}>
         {activeTab.startsWith('triage:') && (
           <TriageScreen key={activeTab} profile={profile} field={activeTab.slice(7) as Field}
             showFieldTitle={myFields.length > 1} />
@@ -140,41 +166,73 @@ function LoginScreen() {
   }
 
   return (
-    <FullScreen>
-      <div className="w-full max-w-sm rounded-3xl border border-[var(--line)] bg-[var(--card)] p-7 flex flex-col gap-5 rise" style={{ boxShadow: "var(--shadow)" }}>
-        <div className="flex items-center gap-2.5">
-          <RadarMark size={30} />
-          <div>
-            <div className="font-semibold">Mediogram Portal</div>
-            <div className="mono text-[11px] text-[var(--muted)]">триаж клинических исследований</div>
+    <div className="min-h-[100dvh] relative overflow-hidden flex items-center justify-center px-4"
+      style={{ background: 'var(--nav)' }}>
+      {/* кольца радара на фоне */}
+      <svg aria-hidden="true" className="absolute pointer-events-none" width="1100" height="1100" viewBox="0 0 1100 1100"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0.55 }}>
+        {[120, 240, 360, 480].map((r) => (
+          <circle key={r} cx="550" cy="550" r={r} fill="none" stroke="var(--nav-line)" strokeWidth="1" />
+        ))}
+        <g className="radar-sweep">
+          <defs>
+            <linearGradient id="sweepG" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#00B9BF" stopOpacity="0" />
+              <stop offset="1" stopColor="#00B9BF" stopOpacity="0.22" />
+            </linearGradient>
+          </defs>
+          <path d="M550 550 L550 70 A480 480 0 0 1 889 211 Z" fill="url(#sweepG)" />
+        </g>
+      </svg>
+
+      <div className="relative w-full max-w-[400px] rise">
+        <div className="flex items-center gap-3 mb-6 justify-center">
+          <RadarMark size={34} animated />
+          <div className="leading-tight">
+            <div className="text-[18px] font-semibold" style={{ color: 'var(--nav-text)' }}>Mediogram Portal</div>
+            <div className="mono text-[11px] tracking-wide" style={{ color: 'var(--nav-muted)' }}>триаж клинических исследований</div>
           </div>
         </div>
 
-        {sent ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-[14px]">Ссылка для входа отправлена на <span className="mono text-[var(--teal)]">{email}</span>.</p>
-            <p className="text-[12px] text-[var(--muted)]">Откройте письмо и нажмите кнопку — ссылка одноразовая и действует 15 минут.</p>
-          </div>
-        ) : (
-          <>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-medium uppercase tracking-wide text-[var(--muted)]">Рабочий email</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && email.includes('@') && sendLink()}
-                type="email" placeholder="doctor@clinic.by" autoFocus
-                className="rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 py-2.5 text-[14px] focus:outline-none focus:border-[var(--teal)]" />
-            </label>
-            <button onClick={sendLink} disabled={busy || !email.includes('@')}
-              className="rounded-xl py-2.5 font-semibold text-[14px] disabled:opacity-40"
-              style={{ background: 'var(--teal)', color: 'var(--on-accent)' }}>
-              {busy ? 'Отправка…' : 'Получить ссылку для входа'}
-            </button>
-            {err && <p className="text-[12px]" style={{ color: 'var(--red)' }}>{err}</p>}
-            <p className="text-[11px] text-[var(--muted)]">Без паролей: на почту придёт персональная одноразовая ссылка.</p>
-          </>
-        )}
+        <div className="rounded-[22px] p-7 flex flex-col gap-5" style={{ background: 'var(--card)', boxShadow: 'var(--shadow-pop)' }}>
+          {sent ? (
+            <div className="flex flex-col gap-3">
+              <span className="w-10 h-10 rounded-full grid place-items-center" style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg>
+              </span>
+              <p className="text-[15px] font-semibold">Проверьте почту</p>
+              <p className="text-[13.5px] text-[var(--muted)]">
+                Ссылка для входа отправлена на <span className="mono text-[var(--teal)]">{email}</span>.
+                Она одноразовая и действует 15 минут.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <h1 className="text-[19px] font-semibold">Вход в кабинет</h1>
+                <p className="text-[13px] text-[var(--muted)] mt-1">Без паролей — пришлём персональную одноразовую ссылку.</p>
+              </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="eyebrow">Рабочий email</span>
+                <input value={email} onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && email.includes('@') && sendLink()}
+                  type="email" placeholder="doctor@clinic.by" autoFocus
+                  className="input h-11 text-[14px]" />
+              </label>
+              <button onClick={sendLink} disabled={busy || !email.includes('@')} className="btn btn-primary h-11 text-[14px]">
+                {busy ? 'Отправка…' : 'Получить ссылку для входа'}
+              </button>
+              {err && (
+                <p className="text-[12.5px] rounded-xl px-3 py-2.5" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>{err}</p>
+              )}
+            </>
+          )}
+        </div>
+        <p className="text-center text-[11.5px] mt-5" style={{ color: 'var(--nav-muted)' }}>
+          Доступ выдаёт администратор Mediogram
+        </p>
       </div>
-    </FullScreen>
+    </div>
   )
 }
 
@@ -185,24 +243,26 @@ function FullScreen({ children }: { children: React.ReactNode }) {
 function Spinner({ text }: { text: string }) {
   return (
     <div className="flex flex-col items-center gap-3">
-      <svg width="56" height="56" viewBox="0 0 72 72" style={{ animation: 'spin 3s linear infinite' }}>
+      <svg width="56" height="56" viewBox="0 0 72 72">
         <circle cx="36" cy="36" r="34" fill="none" stroke="var(--line)" strokeWidth="1" />
         <circle cx="36" cy="36" r="22" fill="none" stroke="var(--line)" strokeWidth="1" />
-        <line x1="36" y1="36" x2="36" y2="2" stroke="var(--teal)" strokeWidth="1.5" />
+        <circle cx="36" cy="36" r="10" fill="none" stroke="var(--line)" strokeWidth="1" />
+        <line className="radar-sweep" x1="36" y1="36" x2="36" y2="2" stroke="var(--teal)" strokeWidth="1.5"
+          style={{ animationDuration: '2.4s' }} />
       </svg>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       <p className="mono text-[12px] text-[var(--muted)]">{text}</p>
     </div>
   )
 }
 
-function RadarMark({ size = 24 }: { size?: number }) {
+function RadarMark({ size = 24, animated = false }: { size?: number; animated?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-      <line x1="12" y1="2" x2="12" y2="6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.5" stroke="var(--teal-bright)" strokeWidth="1.4" opacity=".45" />
+      <circle cx="12" cy="12" r="6.5" stroke="var(--teal-bright)" strokeWidth="1.4" opacity=".7" />
+      <circle cx="12" cy="12" r="2.2" fill="var(--teal-bright)" />
+      <line className={animated ? 'radar-sweep' : undefined} x1="12" y1="12" x2="12" y2="1.5"
+        stroke="var(--teal-bright)" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }
