@@ -129,11 +129,17 @@ export function timeAgo(iso: string | null | undefined, now = Date.now()): strin
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
 }
 
-/** Короткая метка для ячейки: «пн 14:02». */
+/**
+ * Короткая метка для ячейки. Свежее (до 6 дней) — «пн 14:02»; старше —
+ * дата «24.08», иначе давний выбор выглядит как вчерашний.
+ */
 export function shortStamp(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
+  if (Date.now() - d.getTime() >= 6 * DAY) {
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+  }
   const wd = d.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', '')
   const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   return `${wd} ${hm}`
