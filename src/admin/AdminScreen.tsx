@@ -46,6 +46,15 @@ function shortName(p: { full_name: string; email: string }): string {
   return peerName(p)
 }
 
+// 1 исследование, 2 исследования, 5 исследований.
+function plural(n: number, forms: [string, string, string]): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return forms[0]
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return forms[1]
+  return forms[2]
+}
+
 export default function AdminScreen() {
   const [section, setSection] = useState<Section>('monitor')
   const [field, setField] = useState<Field>('cardiology')
@@ -65,6 +74,8 @@ export default function AdminScreen() {
   const [lastSeen, setLastSeen] = useState<Map<string, string>>(new Map())
   const [showAllAdmins, setShowAllAdmins] = useState(false)
   const [order, setOrder] = useState<'rank' | 'accepted'>('rank')
+  // Клик по «принято» в матрице открывает эту карточку во вкладке «В работе».
+  const [focusKey, setFocusKey] = useState('')
 
   // врачи и группы
   const [inviteEmail, setInviteEmail] = useState('')
@@ -249,6 +260,19 @@ export default function AdminScreen() {
     })()
   }, [accepted, contacts])
 
+  // Прокрутка к карточке, открытой из матрицы, и короткая подсветка.
+  useEffect(() => {
+    if (section !== 'work' || !focusKey) return
+    document.getElementById(`work-${focusKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const timer = window.setTimeout(() => setFocusKey(''), 2600)
+    return () => window.clearTimeout(timer)
+  }, [section, focusKey])
+
+  function openWork(userId: string, trialId: string) {
+    setSection('work')
+    setFocusKey(`${userId}:${trialId}`)
+  }
+
   async function setStage(d: Decision, stage: WorkStage) {
     setDecisions((prev) => prev.map((x) =>
       x.user_id === d.user_id && x.trial_id === d.trial_id ? { ...x, work_stage: stage } : x))
@@ -424,6 +448,25 @@ export default function AdminScreen() {
       {/* ================================================== МОНИТОРИНГ */}
       {section === 'monitor' && (
         <>
+          <button onClick={() => setSection('work')}
+            className="card card-hover w-full px-4 py-3.5 flex items-center gap-3.5 text-left"
+            style={{ background: 'var(--teal-soft)', borderColor: 'var(--teal-line)' }}>
+            <span className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: 'var(--teal)', color: '#FFFFFF' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 12h4l3 7 4-14 3 7h4" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">
+                В работе: {acceptedInField.length} {plural(acceptedInField.length, ['исследование', 'исследования', 'исследований'])} · {FIELDS[field].label}
+              </span>
+              <span className="block text-[12.5px] text-[var(--muted)]">
+                Полные карточки, контакты спонсоров для связи и трек этапов работы
+              </span>
+            </span>
+            <span className="text-[13px] font-semibold shrink-0" style={{ color: 'var(--teal)' }}>Открыть →</span>
+          </button>
+
           <div className="card px-4 py-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2">
               <span className="eyebrow">Выпуск</span>
@@ -504,9 +547,15 @@ export default function AdminScreen() {
                             </div>
                           </div>
                         </td>
-                        {columns.map((d) => (
-                          <td key={d.id} className="text-center"><StatusCell cell={cellFor(d.id, t.id)} /></td>
-                        ))}
+                        {columns.map((d) => {
+                          const live = decMap.get(`${d.id}:${t.id}`)
+                          return (
+                            <td key={d.id} className="text-center">
+                              <StatusCell cell={cellFor(d.id, t.id)}
+                                onOpen={live?.status === 'accepted' ? () => openWork(d.id, t.id) : undefined} />
+                            </td>
+                          )
+                        })}
                         <td className="text-center">
                           <span className="mono text-[13px] font-semibold" style={{ color: n > 0 ? 'var(--green)' : 'var(--faint)' }}>{n}</span>
                         </td>
@@ -595,8 +644,9 @@ export default function AdminScreen() {
         <>
           <div className="flex flex-wrap items-center gap-3">
             <FieldSwitch value={field} onChange={setField} counts={acceptedPerField} />
-            <p className="text-[12.5px] text-[var(--muted)]">
-              Полная карточка и контакты спонсора — кому писать. Этапы отмечаете вы, врач видит тот же трек у себя.
+            <p className="text-[12.5px] text-[var(--muted)] max-w-[60ch]">
+              Контакты — внутри каждой карточки, раздел «Контакты спонсора». Этап работы меняется
+              кликом по точке на треке; врач видит тот же трек у себя.
             </p>
           </div>
           {acceptedInField.length === 0 && (
@@ -605,9 +655,12 @@ export default function AdminScreen() {
             </div>
           )}
           <div className="flex flex-col gap-4">
-            {acceptedInField.map(({ d, doc, t }) => (
+            {acceptedInField.map(({ d, doc, t }) => {
+              const key = `${d.user_id}:${d.trial_id}`
+              return (
+              <div key={key} id={`work-${key}`} style={{ scrollMarginTop: 84 }}
+                className={`rounded-[20px] transition-shadow duration-500 ${focusKey === key ? 'ring-2 ring-[var(--teal-bright)] ring-offset-4 ring-offset-[var(--bg)]' : ''}`}>
               <TrialCard
-                key={`${d.user_id}:${d.trial_id}`}
                 trial={t}
                 mode="readonly"
                 defaultOpen
@@ -640,7 +693,9 @@ export default function AdminScreen() {
                   />
                 }
               />
-            ))}
+              </div>
+              )
+            })}
           </div>
         </>
       )}
@@ -852,22 +907,33 @@ function ScorePill({ score }: { score: number | null }) {
   )
 }
 
-function StatusCell({ cell }: { cell: Cell | null }) {
+function StatusCell({ cell, onOpen }: { cell: Cell | null; onOpen?: () => void }) {
   if (!cell) return <span className="text-[var(--line-strong)]">—</span>
   const s = STATUS_STYLE[cell.status]
   const title = [
     STATUS_LABEL[cell.status],
     fullStamp(cell.at),
     cell.status === 'accepted' && cell.stage ? `этап: ${STAGES[cell.stage]}` : '',
+    onOpen ? 'нажмите — карточка, контакты и этапы' : '',
   ].filter(Boolean).join(' · ')
-  return (
-    <span className="inline-flex flex-col items-center gap-1" title={title}>
+  const inner = (
+    <>
       <span className="inline-flex items-center justify-center h-6 min-w-[26px] px-1.5 rounded-md text-[12px] font-bold"
         style={{ color: s.fg, background: s.bg }}>
         {s.icon}
       </span>
       <span className="mono text-[10px] text-[var(--faint)] whitespace-nowrap">{shortStamp(cell.at)}</span>
-    </span>
+      {cell.status === 'accepted' && cell.stage && cell.stage !== 'interest' && (
+        <span className="text-[9.5px] font-medium whitespace-nowrap" style={{ color: 'var(--teal)' }}>{STAGES[cell.stage]}</span>
+      )}
+    </>
+  )
+  if (!onOpen) return <span className="inline-flex flex-col items-center gap-1" title={title}>{inner}</span>
+  return (
+    <button type="button" onClick={onOpen} title={title}
+      className="inline-flex flex-col items-center gap-1 rounded-lg px-2 py-1 -my-1 transition-colors hover:bg-[var(--green-soft)] cursor-pointer">
+      {inner}
+    </button>
   )
 }
 
