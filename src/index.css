@@ -1,59 +1,215 @@
 @import "tailwindcss";
 
+/* ================================================================ tokens
+   Палитра — из мира самого продукта: тёмно-синий шапки как в письмах
+   выпуска, бирюза радара как единственный акцент, светлые «клинические»
+   поверхности для работы. Имена старых токенов сохранены — на них держатся
+   все экраны. */
 :root {
-  --bg: #F7F9FC;
-  --panel: #FFFFFF;
+  /* поверхности */
+  --bg: #F3F5F8;
+  --panel: #F8FAFC;
   --card: #FFFFFF;
-  --line: #E3E9F2;
-  --line-strong: #CBD6E4;
-  --teal: #0B9BA1;
-  --teal-bright: #00C2C7;
-  --teal-soft: #E5F7F8;
-  --text: #0B1526;
-  --muted: #5B6B84;
-  --green: #1FA35C;
-  --green-soft: #E8F7EF;
-  --red: #E5484D;
-  --red-soft: #FDEBEC;
-  --amber: #D97E00;
-  --amber-soft: #FFF4E0;
+  --sunken: #EEF2F6;
+
+  /* линии */
+  --line: #E1E7EF;
+  --line-strong: #C9D3E0;
+
+  /* текст */
+  --text: #0A1628;
+  --muted: #5A6A82;
+  --faint: #8D99AC;
+
+  /* акцент — бирюза радара */
+  --teal: #08868C;
+  --teal-bright: #00B9BF;
+  --teal-soft: #E4F4F4;
+  --teal-line: #B5E1E2;
   --on-accent: #FFFFFF;
-  --shadow: 0 1px 2px rgba(11,21,38,0.05), 0 8px 24px -12px rgba(11,21,38,0.12);
-  --shadow-lift: 0 2px 4px rgba(11,21,38,0.06), 0 16px 32px -12px rgba(11,21,38,0.18);
+
+  /* шапка */
+  --nav: #0A1628;
+  --nav-2: #13233B;
+  --nav-line: #22344F;
+  --nav-text: #E7EDF6;
+  --nav-muted: #8FA0BA;
+
+  /* смысловые цвета */
+  --green: #15885A;
+  --green-soft: #E5F4EC;
+  --red: #CF3F48;
+  --red-soft: #FBEAEB;
+  --amber: #B97206;
+  --amber-soft: #FBF1DF;
+
+  /* направления — у каждого свой маркер, чтобы не путать */
+  --field-cardiology: #08868C;
+  --field-cardiology-soft: #E4F4F4;
+  --field-oncology: #6A55C8;
+  --field-oncology-soft: #EEEBFA;
+
+  /* тени */
+  --shadow: 0 1px 2px rgba(10, 22, 40, 0.04), 0 6px 20px -12px rgba(10, 22, 40, 0.14);
+  --shadow-lift: 0 2px 4px rgba(10, 22, 40, 0.05), 0 18px 36px -16px rgba(10, 22, 40, 0.22);
+  --shadow-pop: 0 12px 40px -12px rgba(10, 22, 40, 0.35);
+
+  --radius: 14px;
+  --radius-lg: 20px;
 }
 
 html, body { background: var(--bg); color: var(--text); }
-body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-.mono { font-family: "IBM Plex Mono", monospace; }
+body {
+  font-family: Onest, Inter, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.num { font-variant-numeric: tabular-nums; }
+::selection { background: var(--teal-soft); color: var(--text); }
 
-/* Входная анимация карточек — мягкий подъём, ступенчато */
+:focus-visible {
+  outline: 2px solid var(--teal-bright);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ================================================================ компоненты */
+@layer components {
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  /* кнопки */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px;
+    border-radius: 11px;
+    font-size: 13px; font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--card); color: var(--text);
+    transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--line-strong); background: var(--panel); }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+  .btn-primary { background: var(--teal); border-color: var(--teal); color: var(--on-accent); }
+  .btn-primary:hover { background: #0A7A80; border-color: #0A7A80; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: var(--sunken); border-color: transparent; color: var(--text); }
+  .btn-sm { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+
+  .link { color: var(--teal); font-weight: 500; }
+  .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* поля ввода */
+  .input {
+    height: 38px; padding: 0 12px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font-size: 13px; color: var(--text);
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .input::placeholder { color: var(--faint); }
+  .input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+
+  /* чипы */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 24px; padding: 0 9px;
+    border-radius: 999px;
+    font-size: 11.5px; font-weight: 500;
+    border: 1px solid var(--line);
+    color: var(--muted); background: var(--card);
+    white-space: nowrap;
+  }
+
+  /* сегментный переключатель */
+  .seg {
+    display: inline-flex; padding: 3px; gap: 2px;
+    border-radius: 12px;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+  }
+  .seg > button {
+    height: 30px; padding: 0 12px;
+    border-radius: 9px;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--muted);
+    transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+    white-space: nowrap;
+  }
+  .seg > button:hover { color: var(--text); }
+  .seg > button[aria-pressed="true"] {
+    background: var(--card); color: var(--text);
+    box-shadow: 0 1px 2px rgba(10, 22, 40, 0.08), 0 0 0 1px var(--line);
+  }
+
+  /* таблицы мониторинга */
+  .tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+  .tbl th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--panel);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--faint);
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+  .tbl tbody tr:hover td { background: #FAFBFD; }
+  .tbl .sticky-col { position: sticky; left: 0; z-index: 1; background: var(--card); }
+  .tbl th.sticky-col { z-index: 3; background: var(--panel); }
+  .tbl tbody tr:hover td.sticky-col { background: #FAFBFD; }
+}
+
+/* ================================================================ движение */
 @keyframes rise-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.rise { animation: rise-in .38s cubic-bezier(.22,.8,.36,1) both; }
+.rise { animation: rise-in .36s cubic-bezier(.22,.8,.36,1) both; }
 .rise-1 { animation-delay: .03s } .rise-2 { animation-delay: .07s }
 .rise-3 { animation-delay: .11s } .rise-4 { animation-delay: .15s }
 .rise-5 { animation-delay: .19s } .rise-6 { animation-delay: .23s }
 
-/* Карточка: подъём на hover */
-.card-hover { transition: box-shadow .22s ease, transform .22s ease; box-shadow: var(--shadow); }
-.card-hover:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.card-hover { transition: box-shadow .22s ease, transform .22s ease, border-color .22s ease; box-shadow: var(--shadow); }
+.card-hover:hover { box-shadow: var(--shadow-lift); border-color: var(--line-strong); }
 
-/* Пульс текущей точки трека */
 @keyframes dot-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(11,155,161,.35); }
-  70%  { box-shadow: 0 0 0 8px rgba(11,155,161,0); }
-  100% { box-shadow: 0 0 0 0 rgba(11,155,161,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(8,134,140,.35); }
+  70%  { box-shadow: 0 0 0 8px rgba(8,134,140,0); }
+  100% { box-shadow: 0 0 0 0 rgba(8,134,140,0); }
 }
 .dot-current { animation: dot-pulse 2s ease-out infinite; }
 
-/* Заполнение линии трека */
 .track-fill { transition: width .5s cubic-bezier(.22,.8,.36,1); }
 
-/* Тост */
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .toast-in { animation: toast-in .25s ease-out both; }
+
+/* развёртка радара на логотипе */
+@keyframes sweep { to { transform: rotate(360deg); } }
+.radar-sweep { transform-origin: 50% 50%; animation: sweep 6s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
