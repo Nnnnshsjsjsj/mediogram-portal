@@ -3,6 +3,15 @@ on:
   schedule:
     - cron: "0 5 * * 1"   # понедельник 05:00 UTC = 07:00 CET
   workflow_dispatch:
+    inputs:
+      fields:
+        description: "Только эти направления (через запятую, напр. ophthalmology). Пусто — все, выпуск пересобирается целиком"
+        required: false
+        default: ""
+      send_emails:
+        description: "Разослать письма врачам"
+        type: boolean
+        default: true
 jobs:
   digest:
     runs-on: ubuntu-latest
@@ -25,6 +34,7 @@ jobs:
       - name: Sync to Supabase
         run: node scripts/sync_to_db.mjs out/latest.json
         env:
+          SYNC_FIELDS: ${{ inputs.fields }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
@@ -42,6 +52,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Send digest emails
+        if: github.event_name == 'schedule' || inputs.send_emails
         run: node scripts/send_digest.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

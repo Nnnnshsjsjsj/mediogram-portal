@@ -86,6 +86,12 @@ const RULES_BY_FIELD = {
 
 const KNOWN_FIELDS = new Set(Object.keys(RULES_BY_FIELD))
 
+// SYNC_FIELDS=ophthalmology — досинхронизировать только эти направления
+// посреди недели (например, когда подключили новое). Выпуск остальных
+// направлений не трогаем: врачи уже работают с ним.
+const ONLY_FIELDS = (process.env.SYNC_FIELDS ?? '').split(',').map((f) => f.trim().toLowerCase()).filter(Boolean)
+const SYNC_SET = ONLY_FIELDS.length ? new Set(ONLY_FIELDS.filter((f) => KNOWN_FIELDS.has(f))) : KNOWN_FIELDS
+
 function fieldOf(lead) {
   return String(lead.field ?? 'cardiology').toLowerCase()
 }
@@ -154,7 +160,7 @@ async function main() {
   const rows = leads
     .filter((l) => l.nct && l.title)
     .filter((l) => ALLOWED_SOURCES.has(sourceOf(l)))
-    .filter((l) => KNOWN_FIELDS.has(fieldOf(l)))
+    .filter((l) => SYNC_SET.has(fieldOf(l)))
     .map((l) => {
       const status = normStatus(l.status)
       return {
@@ -208,7 +214,7 @@ async function main() {
     || String(b.first_posted ?? '').localeCompare(String(a.first_posted ?? ''))
   const current = [], upcoming = []
   const perField = {}
-  for (const f of KNOWN_FIELDS) {
+  for (const f of SYNC_SET) {
     const mine = upserted.filter((t) => (t.field ?? 'cardiology') === f)
     const c = mine.filter((t) => !t.is_upcoming).sort(byScore).slice(0, TOP_CURRENT)
     const u = mine.filter((t) => t.is_upcoming).sort(byScore).slice(0, TOP_UPCOMING)
@@ -216,18 +222,36 @@ async function main() {
     perField[f] = `${c.length}+${u.length}`
   }
   console.log(`Выпуск по направлениям (актуальные+будущие): ${JSON.stringify(perField)}`)
+  // Частичный прогон: убираем из выпуска только строки своих направлений,
+  // остальные оставляем как есть и дописываем новые после них.
+  let rankBase = 0
+  if (SYNC_SET !== KNOWN_FIELDS) {
+    const { data: existing, error: exErr } = await db.from('digest_trials')
+      .select('trial_id, rank, trials(field)').eq('digest_id', digest.id)
+    if (exErr) throw exErr
+    const mineIds = (existing ?? []).filter((r) => SYNC_SET.has(r.trials?.field ?? 'cardiology')).map((r) => r.trial_id)
+    rankBase = 1 + Math.max(-1, ...(existing ?? []).map((r) => r.rank ?? 0))
+    if (mineIds.length) {
+      const { error: delErr } = await db.from('digest_trials').delete()
+        .eq('digest_id', digest.id).in('trial_id', mineIds)
+      if (delErr) throw delErr
+    }
+    console.log(`Частичный прогон (${[...SYNC_SET].join(', ')}): остальные направления выпуска не тронуты`)
+  } else {
+    // Пересобираем выпуск начисто, чтобы не копить хвосты прошлых прогонов.
+    const { error: delErr } = await db.from('digest_trials').delete().eq('digest_id', digest.id)
+    if (delErr) throw delErr
+  }
   const dt = [...current, ...upcoming].map((t, i) => ({
     digest_id: digest.id,
     trial_id: t.id,
     section: t.is_upcoming ? 'upcoming' : 'current',
-    rank: i,
+    rank: rankBase + i,
   }))
-
-  // Пересобираем выпуск начисто, чтобы не копить хвосты прошлых прогонов.
-  const { error: delErr } = await db.from('digest_trials').delete().eq('digest_id', digest.id)
-  if (delErr) throw delErr
-  const { error: dtErr } = await db.from('digest_trials').insert(dt)
-  if (dtErr) throw dtErr
+  if (dt.length) {
+    const { error: dtErr } = await db.from('digest_trials').insert(dt)
+    if (dtErr) throw dtErr
+  }
 
   console.log(`Выпуск ${week}: current=${current.length}, upcoming=${upcoming.length} (отобрано из ${upserted.length})`)
   // Строка для Slack-репорта в workflow:
