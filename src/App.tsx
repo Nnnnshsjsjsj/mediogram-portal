@@ -68,7 +68,8 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] bg-[var(--bg)]">
       <header className="sticky top-0 z-40" style={{ background: 'var(--nav)', borderBottom: '1px solid var(--nav-line)' }}>
-        <div className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-5xl'} px-4 h-14 flex items-center gap-4`}>
+        {/* Шапка всегда широкая: с тремя направлениями меню не влезает в 5xl. */}
+        <div className="mx-auto max-w-7xl px-4 h-14 flex items-center gap-4">
           <div className="flex items-center gap-2.5 shrink-0">
             <RadarMark size={26} animated />
             <div className="leading-tight hidden sm:block">
