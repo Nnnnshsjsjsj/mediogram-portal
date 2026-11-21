@@ -48,6 +48,8 @@
   --field-cardiology-soft: #E4F4F4;
   --field-oncology: #6A55C8;
   --field-oncology-soft: #EEEBFA;
+  --field-ophthalmology: #2F6FD6;
+  --field-ophthalmology-soft: #E7EFFB;
 
   /* тени */
   --shadow: 0 1px 2px rgba(10, 22, 40, 0.04), 0 6px 20px -12px rgba(10, 22, 40, 0.14);

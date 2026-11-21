@@ -105,13 +105,14 @@ export interface Digest {
 // Каждое направление — отдельная вкладка триажа и свой раздел в письме.
 // Новое направление = запись здесь + категории ниже + блок в радаре
 // (mediogram-lead-radar → FIELDS) и в scripts/sync_to_db.mjs / enrich_ru.mjs.
-export type Field = 'cardiology' | 'oncology'
+export type Field = 'cardiology' | 'oncology' | 'ophthalmology'
 
 export const FIELDS: Record<Field, { label: string }> = {
   cardiology: { label: 'Кардиология' },
   oncology: { label: 'Онкология' },
+  ophthalmology: { label: 'Офтальмология' },
 }
-export const FIELD_ORDER: Field[] = ['cardiology', 'oncology']
+export const FIELD_ORDER: Field[] = ['cardiology', 'oncology', 'ophthalmology']
 
 // Какие направления видит пользователь. Админ — все.
 export function userFields(p: Pick<Profile, 'role' | 'fields'>): Field[] {
@@ -143,6 +144,24 @@ export const CATEGORIES: Record<string, string> = {
   onc_uro: 'Онкоурология',
   onc_gyn: 'Онкогинекология',
   onc_other: 'Другие солидные опухоли',
+  // офтальмология — заявка 10-й ГКБ (Минск), ноябрь 2026. Подобласти взяты
+  // с запасом: центр не знает заранее, какие исследования ему подойдут.
+  oph_cataract: 'Катаракта и ИОЛ',
+  oph_glaucoma: 'Глаукома',
+  oph_amd: 'ВМД',
+  oph_dr: 'Диабетическая ретинопатия и ДМО',
+  oph_rvo: 'Окклюзии сосудов сетчатки',
+  oph_vitreoretinal: 'Витреоретинальная хирургия',
+  oph_uveitis: 'Увеиты',
+  oph_cornea: 'Роговица',
+  oph_surface: 'Сухой глаз и поверхность глаза',
+  oph_refractive: 'Рефракционная хирургия и миопия',
+  oph_trauma: 'Травмы и инфекции глаза',
+  oph_neuro: 'Нейроофтальмология',
+  oph_orbit: 'Орбита и окулопластика',
+  oph_onco: 'Офтальмоонкология',
+  oph_genetic: 'Наследственные дистрофии сетчатки',
+  oph_other: 'Другое в офтальмологии',
 }
 
 export const CATEGORY_FIELD: Record<string, Field> = {
@@ -150,6 +169,12 @@ export const CATEGORY_FIELD: Record<string, Field> = {
   antithrombotic: 'cardiology', antiarrhythmic: 'cardiology', devices: 'cardiology', other: 'cardiology',
   onc_breast: 'oncology', onc_lung: 'oncology', onc_gi: 'oncology',
   onc_uro: 'oncology', onc_gyn: 'oncology', onc_other: 'oncology',
+  oph_cataract: 'ophthalmology', oph_glaucoma: 'ophthalmology', oph_amd: 'ophthalmology',
+  oph_dr: 'ophthalmology', oph_rvo: 'ophthalmology', oph_vitreoretinal: 'ophthalmology',
+  oph_uveitis: 'ophthalmology', oph_cornea: 'ophthalmology', oph_surface: 'ophthalmology',
+  oph_refractive: 'ophthalmology', oph_trauma: 'ophthalmology', oph_neuro: 'ophthalmology',
+  oph_orbit: 'ophthalmology', oph_onco: 'ophthalmology', oph_genetic: 'ophthalmology',
+  oph_other: 'ophthalmology',
 }
 
 export function categoriesOf(field: Field): string[] {

@@ -10,7 +10,7 @@
 //   countries[], conditions[], url, posted, category, source, field
 // Если бот не проставил category — деривация ниже (та же логика, что в радаре,
 // плюс фарм-категории для арритмологии; для онкологии — по локализации опухоли).
-// field (радар v8): cardiology | oncology. Нет поля — значит кардиология.
+// field (радар v9): cardiology | oncology | ophthalmology. Нет поля — значит кардиология.
 
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -49,7 +49,42 @@ const ONCOLOGY_CATEGORY_RULES = [
     'gastrointestinal', 'abdominal']],
 ]
 
-const KNOWN_FIELDS = new Set(['cardiology', 'oncology'])
+// Офтальмология: категория = подобласть. Порядок важен — первое совпадение,
+// короткие аббревиатуры — регулярками по границе слова (иначе «iol» найдётся в «biology»),
+// поэтому узкие темы (опухоли, травмы, окклюзии) стоят раньше общих
+// («катаракта» встречается почти в каждом хирургическом исследовании).
+const OPHTHALMOLOGY_CATEGORY_RULES = [
+  ['oph_onco', ['uveal melanoma', 'choroidal melanoma', 'conjunctival melanoma', 'ocular surface squamous',
+    'ocular tumor', 'ocular tumour', 'intraocular lymphoma', 'retinoblastoma']],
+  ['oph_trauma', ['trauma', 'injur', 'open globe', 'endophthalmitis', 'hyphema', 'chemical burn']],
+  ['oph_rvo', ['retinal vein occlusion', 'retinal artery occlusion', 'branch retinal vein', 'central retinal vein',
+    /\bbrvo\b/, /\bcrvo\b/, /\bcrao\b/]],
+  ['oph_dr', ['diabetic retinopathy', 'diabetic macular', /\bdme\b/]],
+  ['oph_amd', ['macular degeneration', /\bn?amd\b/, 'geographic atrophy', 'choroidal neovascular', 'polypoidal']],
+  ['oph_vitreoretinal', ['retinal detachment', 'macular hole', 'epiretinal', 'vitrectomy', 'vitreoretinal',
+    'vitreous hemorrhage', 'vitreous haemorrhage', 'proliferative vitreoretinopathy', 'floaters']],
+  ['oph_glaucoma', ['glaucoma', 'ocular hypertension', 'intraocular pressure', 'trabecul', /\bmigs\b/]],
+  ['oph_uveitis', ['uveitis', 'uveitic', 'scleritis', 'iritis', 'chorioretinitis']],
+  ['oph_neuro', ['optic neuritis', 'optic neuropathy', /\bnaion\b/, 'papilledema', 'nystagmus', 'neuromyelitis']],
+  ['oph_orbit', ['thyroid eye', 'graves orbitopathy', "graves' orbitopathy", /\borbit/, 'ptosis', 'eyelid',
+    'blepharoplasty', 'lacrimal', 'nasolacrimal']],
+  ['oph_genetic', ['retinitis pigmentosa', 'stargardt', 'inherited retinal', 'retinal dystrophy',
+    'leber', 'choroideremia', 'achromatopsia', /\busher\b/]],
+  ['oph_cornea', ['kerato', 'cornea', 'corneal', 'fuchs', 'keratitis', 'limbal']],
+  ['oph_surface', ['dry eye', 'meibomian', 'blephar', 'conjunctivitis', 'sjogren', 'sjögren', 'ocular surface']],
+  ['oph_refractive', ['myopia', 'presbyopia', 'hyperopia', 'astigmatism', 'refractive', 'lasik', /\bsmile\b/,
+    'phakic']],
+  ['oph_cataract', ['cataract', 'intraocular lens', /\biols?\b/, 'phacoemulsification', 'aphakia',
+    'posterior capsule']],
+]
+
+const RULES_BY_FIELD = {
+  cardiology: [CATEGORY_RULES, 'devices'],
+  oncology: [ONCOLOGY_CATEGORY_RULES, 'onc_other'],
+  ophthalmology: [OPHTHALMOLOGY_CATEGORY_RULES, 'oph_other'],
+}
+
+const KNOWN_FIELDS = new Set(Object.keys(RULES_BY_FIELD))
 
 function fieldOf(lead) {
   return String(lead.field ?? 'cardiology').toLowerCase()
@@ -58,11 +93,11 @@ function fieldOf(lead) {
 function deriveCategory(lead) {
   const hay = [lead.title, ...(lead.conditions ?? []), lead.summary ?? '']
     .filter(Boolean).join(' ').toLowerCase()
-  const oncology = fieldOf(lead) === 'oncology'
-  for (const [cat, terms] of oncology ? ONCOLOGY_CATEGORY_RULES : CATEGORY_RULES) {
-    if (terms.some((t) => hay.includes(t))) return cat
+  const [rules, fallback] = RULES_BY_FIELD[fieldOf(lead)] ?? RULES_BY_FIELD.cardiology
+  for (const [cat, terms] of rules) {
+    if (terms.some((t) => (t instanceof RegExp ? t.test(hay) : hay.includes(t)))) return cat
   }
-  return oncology ? 'onc_other' : 'devices'
+  return fallback
 }
 
 function normStatus(s) {

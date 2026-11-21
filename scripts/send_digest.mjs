@@ -24,15 +24,27 @@ const CATEGORIES = {
   antiarrhythmic: 'Антиаритмическая терапия', devices: 'Устройства', other: 'Другое',
   onc_breast: 'Рак молочной железы', onc_lung: 'Рак лёгкого', onc_gi: 'Колоректальный и абдоминальный рак',
   onc_uro: 'Онкоурология', onc_gyn: 'Онкогинекология', onc_other: 'Другие солидные опухоли',
+  oph_cataract: 'Катаракта и ИОЛ', oph_glaucoma: 'Глаукома', oph_amd: 'ВМД',
+  oph_dr: 'Диабетическая ретинопатия и ДМО', oph_rvo: 'Окклюзии сосудов сетчатки',
+  oph_vitreoretinal: 'Витреоретинальная хирургия', oph_uveitis: 'Увеиты', oph_cornea: 'Роговица',
+  oph_surface: 'Сухой глаз и поверхность глаза', oph_refractive: 'Рефракционная хирургия и миопия',
+  oph_trauma: 'Травмы и инфекции глаза', oph_neuro: 'Нейроофтальмология', oph_orbit: 'Орбита и окулопластика',
+  oph_onco: 'Офтальмоонкология', oph_genetic: 'Наследственные дистрофии сетчатки', oph_other: 'Другое в офтальмологии',
 }
 
 // Направления: подпись в письме, к какому относится категория и как часто
-// слать. Онкология — раз в две недели (так попросил центр в заявке).
+// слать. Онкология и офтальмология — раз в две недели (так попросили центры в заявках).
 const FIELDS = {
   cardiology: { label: 'Кардиология', everyWeeks: 1 },
   oncology: { label: 'Онкология', everyWeeks: 2 },
+  ophthalmology: { label: 'Офтальмология', everyWeeks: 2 },
 }
-const CATEGORY_FIELD = (cat) => (String(cat).startsWith('onc_') ? 'oncology' : 'cardiology')
+const CATEGORY_FIELD = (cat) => {
+  const c = String(cat)
+  if (c.startsWith('onc_')) return 'oncology'
+  if (c.startsWith('oph_')) return 'ophthalmology'
+  return 'cardiology'
+}
 
 // Номер недели от понедельника 05.10.2026 (первая неделя онкологии) — для «раз в N недель».
 function weekIndex(weekStart) {

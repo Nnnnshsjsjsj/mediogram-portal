@@ -27,6 +27,7 @@ const DAY = 86400_000
 const FIELD_COLOR: Record<Field, { fg: string; bg: string }> = {
   cardiology: { fg: 'var(--field-cardiology)', bg: 'var(--field-cardiology-soft)' },
   oncology: { fg: 'var(--field-oncology)', bg: 'var(--field-oncology-soft)' },
+  ophthalmology: { fg: 'var(--field-ophthalmology)', bg: 'var(--field-ophthalmology-soft)' },
 }
 
 const STATUS_STYLE: Record<DecisionStatus, { fg: string; bg: string; icon: string; verb: string }> = {
